@@ -16,19 +16,16 @@ const recentActivities = [
     image: IMAGES.BANNER,
     title: '夏季嘉年華：星光遊行',
     subtitle: '每日 19:00 準時開始',
-    tag: '園區主打',
   },
   {
     image: IMAGES.FIREWORKS,
     title: '週末煙火秀',
     subtitle: '每週六、日 20:00 登場',
-    tag: '特別演出',
   },
   {
     image: IMAGES.FOOD,
     title: '美食街 85 折優惠',
     subtitle: '會員出示 App 即享折扣',
-    tag: '限時優惠',
   },
 ];
 
@@ -37,14 +34,12 @@ const activityCards = [
     image: IMAGES.FOOD,
     title: '美食街 85 折優惠',
     description: '出示 App 會員即享優惠',
-    tag: '限時優惠',
     date: '即日起',
   },
   {
     image: IMAGES.FIREWORKS,
     title: '週末煙火秀',
     description: '每週六、日晚上 8 點',
-    tag: '特別表演',
     date: '週末限定',
   },
 ];
@@ -111,10 +106,7 @@ export function HomePage() {
             />
           ))}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent flex flex-col justify-end p-4">
-            <span className="inline-flex w-fit rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-              {recentActivities[activeBannerIndex].tag}
-            </span>
-            <h2 className="mt-2 text-white font-display font-semibold text-lg">{recentActivities[activeBannerIndex].title}</h2>
+            <h2 className="text-white font-display font-semibold text-lg">{recentActivities[activeBannerIndex].title}</h2>
             <p className="text-white/90 text-xs">{recentActivities[activeBannerIndex].subtitle}</p>
           </div>
           <button
@@ -282,10 +274,7 @@ export function HomePage() {
                   {activity.date}
                 </div>
                 <div className="absolute left-3 right-3 bottom-3">
-                  <span className="inline-flex bg-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white">
-                    {activity.tag}
-                  </span>
-                  <h4 className="mt-2 font-display text-2xl font-semibold text-white">{activity.title}</h4>
+                  <h4 className="font-display text-2xl font-semibold text-white">{activity.title}</h4>
                 </div>
               </div>
               <div className="flex items-center justify-between p-3">
