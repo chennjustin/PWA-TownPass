@@ -144,9 +144,14 @@ export function HomePage() {
 
       {/* Transport */}
       <section className="space-y-3">
-        <div className="flex items-center gap-1">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">交通方式</h3>
-          <Bus className="h-4 w-4 text-primary" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">交通方式</h3>
+            <Bus className="h-4 w-4 text-primary" />
+          </div>
+          <Link href="/transport" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
+            查看更多 <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
 
         <div className="space-y-2 border-y border-grayscale-100 py-3">
