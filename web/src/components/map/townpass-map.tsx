@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Baby,
   ChevronDown,
   Clock,
   FerrisWheel,
   MapPin,
-  Navigation,
   Search,
   ShoppingBag,
   SlidersHorizontal,
@@ -15,6 +13,12 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import {
+  MarkerClusterer,
+  SuperClusterAlgorithm,
+  type Marker as ClusterMarker,
+  type Renderer,
+} from "@googlemaps/markerclusterer";
 import { loadGoogleMapsScript } from "@/src/lib/google-maps-service";
 import {
   loadTownPassPoints,
@@ -46,8 +50,14 @@ type GoogleMapsMap = {
 type GoogleMapsLegacyMarker = {
   addListener: (eventName: string, callback: () => void) => void;
   setMap: (map: GoogleMapsMap | null) => void;
-  setIcon: (icon: any) => void;
+  setIcon: (icon: GoogleMapsMarkerIcon) => void;
   setZIndex: (zIndex: number) => void;
+};
+
+type GoogleMapsMarkerIcon = {
+  url: string;
+  scaledSize: unknown;
+  anchor: unknown;
 };
 
 type GoogleMapsInfoWindow = {
@@ -90,6 +100,12 @@ type MarkerEntry = {
 };
 
 type MarkerKind = "restaurant" | "shop" | "ferrisWheel";
+type MarkerClustererMap = ConstructorParameters<typeof MarkerClusterer>[0]["map"];
+
+const MAP_MIN_ZOOM = 10;
+const MAP_MAX_ZOOM = 22;
+const MARKER_CLUSTER_MAX_ZOOM = 18;
+const MARKER_CLUSTER_RADIUS = 64;
 
 
 
@@ -233,7 +249,7 @@ function getParkOperatingStatus(date: Date) {
 function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: GoogleMapsNamespace) {
   const fill = selected ? "#F36F7F" : "#FFFFFF";
   const stroke = selected ? "#FFFFFF" : "#9AAEC8";
-  const size = selected ? 70 : 58;
+  const size = selected ? 56 : 42;
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + 10}" viewBox="0 0 72 84">
       <defs>
@@ -261,6 +277,7 @@ export function TownPassMap() {
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
   const userMarkerRef = useRef<GoogleMapsLegacyMarker | null>(null);
+  const clustererRef = useRef<MarkerClusterer | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
@@ -334,8 +351,8 @@ export function TownPassMap() {
         const mapOptions: Record<string, unknown> = {
           center: parkCenter,
           zoom: 18,
-          minZoom: 10,
-          maxZoom: 100,
+          minZoom: MAP_MIN_ZOOM,
+          maxZoom: MAP_MAX_ZOOM,
           restriction: {
             latLngBounds: parkBounds,
             strictBounds: true,
@@ -394,6 +411,9 @@ export function TownPassMap() {
 
     return () => {
       cancelled = true;
+      if (clustererRef.current) {
+        clustererRef.current.clearMarkers();
+      }
       markersRef.current.forEach((entry) => clearMarker(entry.marker));
       markersRef.current = [];
       if (userMarkerRef.current) {
@@ -414,33 +434,6 @@ export function TownPassMap() {
     });
     return detailMap;
   }, [placeDetails]);
-
-  const categories = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          allPoints
-            .filter((point) => getPointContentType(point) === selectedContentType)
-            .filter((point) => selectedContentType !== "facility" || isRidePoint(point))
-            .map((point) => point.category),
-        ),
-      ).sort(),
-    [allPoints, selectedContentType],
-  );
-
-  const floors = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          allPoints
-            .filter((point) => getPointContentType(point) === selectedContentType)
-            .filter((point) => selectedContentType !== "facility" || isRidePoint(point))
-            .map((point) => point.floor)
-            .filter((floor): floor is number => typeof floor === "number"),
-        ),
-      ).sort((a, b) => a - b),
-    [allPoints, selectedContentType],
-  );
 
   const visiblePoints = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -513,6 +506,9 @@ export function TownPassMap() {
       return;
     }
 
+    if (clustererRef.current) {
+      clustererRef.current.clearMarkers();
+    }
     markersRef.current.forEach((entry) => clearMarker(entry.marker));
     markersRef.current = [];
     const bounds = new maps.LatLngBounds();
@@ -521,13 +517,14 @@ export function TownPassMap() {
       const isSelected = selectedPointId === point.id;
       const marker = new maps.Marker({
         position: { lat: point.lat, lng: point.lng },
-        map: mapRef.current,
+        map: null, // 交由 MarkerClusterer 管理顯示
         title: point.name,
         icon: createMapMarkerIcon(point, isSelected, maps),
         zIndex: isSelected ? 1000 : 1,
       });
 
       marker.addListener("click", () => {
+        setSelectedPoint(null); // 確保回到簡短資訊 (carousel)
         mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
         const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
         if (pointIndex !== -1) {
@@ -535,7 +532,7 @@ export function TownPassMap() {
           if (container) {
             container.scrollTo({
               left: pointIndex * container.offsetWidth,
-              behavior: "smooth",
+              behavior: "auto", // 使用 auto 取代 smooth，即可瞬間跳轉，不會有經過其他設施的動畫
             });
           }
         }
@@ -545,6 +542,54 @@ export function TownPassMap() {
       markersRef.current.push({ marker, pointId: point.id });
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
+
+    if (!clustererRef.current) {
+      const renderer: Renderer = {
+        render: ({ count, position }) => {
+          return new maps.Marker({
+            position,
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+                  <circle cx="20" cy="20" r="18" fill="#006876" stroke="#ffffff" stroke-width="3" />
+                  <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="bold" font-family="sans-serif">${count}</text>
+                </svg>
+              `)}`,
+              scaledSize: new maps.Size(40, 40),
+              anchor: new maps.Point(20, 20),
+            },
+            zIndex: 1000,
+          }) as unknown as ClusterMarker;
+        },
+      };
+      clustererRef.current = new MarkerClusterer({ 
+        map: mapRef.current as unknown as MarkerClustererMap,
+        renderer,
+        onClusterClick: (_event, cluster, map) => {
+          setSelectedPoint(null);
+          setActiveCarouselPointId(null);
+
+          const targetZoom = Math.min(
+            (map.getZoom() ?? MARKER_CLUSTER_MAX_ZOOM) + 2,
+            MAP_MAX_ZOOM,
+          );
+
+          map.setZoom(targetZoom);
+          map.panTo(cluster.position);
+          window.setTimeout(() => {
+            map.panTo(cluster.position);
+          }, 0);
+        },
+        algorithm: new SuperClusterAlgorithm({
+          maxZoom: MARKER_CLUSTER_MAX_ZOOM,
+          radius: MARKER_CLUSTER_RADIUS,
+        })
+      });
+    }
+
+    clustererRef.current.addMarkers(
+      markersRef.current.map(({ marker }) => marker as unknown as ClusterMarker),
+    );
 
     const focusedPoint = selectedPointId
       ? visiblePoints.find((point) => point.id === selectedPointId)
@@ -816,28 +861,25 @@ export function TownPassMap() {
           className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
             }`}
         >
-          {selectedPoint && (
-            <div className="mb-3 flex justify-end">
-              <button
-                onClick={() => {
-                  setSelectedPoint(null);
-                  setDetailSheetExpanded(false);
-                }}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-grayscale-100 text-grayscale-700"
-                aria-label="關閉已選點位"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
           {selectedPoint ? (
-            <div className="space-y-4">
-              <button
-                onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
-                className="mx-auto block h-1.5 w-12 rounded-full bg-grayscale-200"
-                aria-label={detailSheetExpanded ? "收合點位詳情" : "展開點位詳情"}
-              />
+            <div className="space-y-4 pt-1">
+              <div className="relative flex items-center justify-center">
+                <button
+                  onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
+                  className="block h-1.5 w-12 rounded-full bg-grayscale-200"
+                  aria-label={detailSheetExpanded ? "收合點位詳情" : "展開點位詳情"}
+                />
+                <button
+                  onClick={() => {
+                    setSelectedPoint(null);
+                    setDetailSheetExpanded(false);
+                  }}
+                  className="absolute right-0 flex h-7 w-7 items-center justify-center rounded-full bg-grayscale-100 text-grayscale-500 transition-transform active:scale-95"
+                  aria-label="關閉已選點位"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
               <div className="flex items-center justify-between gap-3">
                 <button
