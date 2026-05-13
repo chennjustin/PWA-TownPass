@@ -176,7 +176,7 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
-  const userMarkerRef = useRef<GoogleMapsMarker | null>(null);
+  const userMarkerRef = useRef<GoogleMapsLegacyMarker | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
@@ -240,8 +240,8 @@ export function TownPassMap() {
         const mapOptions: Record<string, unknown> = {
           center: parkCenter,
           zoom: 18,
-          minZoom: 16,
-          maxZoom: 21,
+          minZoom: 10,
+          maxZoom: 100,
           restriction: {
             latLngBounds: parkBounds,
             strictBounds: true,
@@ -354,7 +354,6 @@ export function TownPassMap() {
     setSelectedPoint(point);
     setDetailSheetExpanded(false);
     mapRef.current.panTo({ lat: point.lat, lng: point.lng });
-    mapRef.current.setZoom(18);
     infoWindowRef.current?.close();
   };
 
@@ -382,7 +381,6 @@ export function TownPassMap() {
         setSelectedPoint(point);
         setDetailSheetExpanded(false);
         mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
-        mapRef.current?.setZoom(18);
         infoWindowRef.current?.close();
       });
 
@@ -390,7 +388,13 @@ export function TownPassMap() {
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
 
-    if (visiblePoints.length > 1) {
+    const focusedPoint = selectedPointId
+      ? visiblePoints.find((point) => point.id === selectedPointId)
+      : null;
+
+    if (focusedPoint) {
+      mapRef.current.panTo({ lat: focusedPoint.lat, lng: focusedPoint.lng });
+    } else if (visiblePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 48);
     } else if (!userPosition && visiblePoints.length === 1) {
       mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });

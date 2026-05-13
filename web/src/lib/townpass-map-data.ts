@@ -39,10 +39,10 @@ export const parkCenter = {
 };
 
 export const parkBounds = {
-  north: 25.099,
-  south: 25.0959,
-  east: 121.5169,
-  west: 121.51355,
+  north: 25.0990,
+  south: 25.0950,
+  east: 121.5175,
+  west: 121.5130,
 };
 
 export async function loadTownPassPoints() {
