@@ -1,10 +1,12 @@
 const GOOGLE_MAPS_SCRIPT_ID = "townpass-google-maps-script";
+const GOOGLE_MAPS_CALLBACK = "__townpassGoogleMapsLoaded";
 
 declare global {
   interface Window {
     google?: {
       maps?: unknown;
     };
+    __townpassGoogleMapsLoaded?: () => void;
   }
 }
 
@@ -24,29 +26,35 @@ export async function loadGoogleMapsScript(apiKey: string): Promise<void> {
   }
 
   const promise = new Promise<void>((resolve, reject) => {
+    window[GOOGLE_MAPS_CALLBACK] = () => {
+      resolve(undefined);
+      delete window[GOOGLE_MAPS_CALLBACK];
+    };
+
     const existingScript = document.getElementById(
       GOOGLE_MAPS_SCRIPT_ID,
     ) as HTMLScriptElement | null;
 
     if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(undefined), {
-        once: true,
-      });
-      existingScript.addEventListener(
-        "error",
-        () => reject(new Error("Failed to load existing Google Maps script")),
-        { once: true },
-      );
-      return;
+      if (window.google?.maps) {
+        resolve(undefined);
+        return;
+      }
+      existingScript.remove();
     }
 
     const script = document.createElement("script");
     script.id = GOOGLE_MAPS_SCRIPT_ID;
     script.async = true;
     script.defer = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    const params = new URLSearchParams({
+      key: apiKey,
+      loading: "async",
+      libraries: "marker",
+      callback: GOOGLE_MAPS_CALLBACK,
+    });
+    script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
 
-    script.onload = () => resolve(undefined);
     script.onerror = () => reject(new Error("Failed to load Google Maps script"));
 
     document.head.appendChild(script);
