@@ -60,7 +60,7 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
   ];
 
   return (
-    <div className="pt-16 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       {/* Header Controls */}
       <div className="px-4 py-3 space-y-3 bg-surface z-20 shadow-sm border-b border-grayscale-100">
         <div className="flex gap-2 items-center">

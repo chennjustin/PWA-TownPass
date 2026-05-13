@@ -39,6 +39,9 @@ type GoogleMapsNamespace = {
   InfoWindow: new () => GoogleMapsInfoWindow;
   LatLngBounds: new () => GoogleMapsLatLngBounds;
   Size: new (width: number, height: number) => unknown;
+  SymbolPath: {
+    CIRCLE: unknown;
+  };
 };
 
 type MapLayerState = {
@@ -50,8 +53,60 @@ type MarkerEntry = {
   marker: GoogleMapsMarker;
 };
 
+type LocateResult =
+  | { ok: true; coords: { lat: number; lng: number } }
+  | {
+      ok: false;
+      reason: "not_supported" | "permission_denied" | "insecure_context" | "unavailable";
+    };
+
 const facilityIconUrl = "https://maps.google.com/mapfiles/ms/icons/blue-dot.png";
 const restaurantIconUrl = "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
+
+function locateCurrentPosition(): Promise<LocateResult> {
+  if (!navigator.geolocation) {
+    return Promise.resolve({ ok: false, reason: "not_supported" });
+  }
+
+  if (!window.isSecureContext && window.location.hostname !== "localhost") {
+    return Promise.resolve({ ok: false, reason: "insecure_context" });
+  }
+
+  const tryLocate = (enableHighAccuracy: boolean, timeout: number) =>
+    new Promise<LocateResult>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            ok: true,
+            coords: {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            },
+          });
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            resolve({ ok: false, reason: "permission_denied" });
+            return;
+          }
+          resolve({ ok: false, reason: "unavailable" });
+        },
+        {
+          enableHighAccuracy,
+          timeout,
+          maximumAge: 0,
+        },
+      );
+    });
+
+  return tryLocate(true, 12000).then((result) => {
+    if (result.ok || result.reason === "permission_denied") {
+      return result;
+    }
+    // Retry once with lower accuracy for devices that cannot get GPS fix quickly.
+    return tryLocate(false, 15000);
+  });
+}
 
 function getMapsNamespace(): GoogleMapsNamespace | null {
   const maps = window.google?.maps;
@@ -66,6 +121,7 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
+  const userMarkerRef = useRef<GoogleMapsMarker | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
@@ -77,6 +133,9 @@ export function TownPassMap() {
       : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
   );
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
+  const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -110,8 +169,42 @@ export function TownPassMap() {
         }
 
         setAllPoints(loadedPoints);
+        const locateResult = await locateCurrentPosition();
+        if (cancelled) {
+          return;
+        }
+
+        if (locateResult.ok) {
+          setUserPosition(locateResult.coords);
+          setStatusText(
+            `定位成功（${locateResult.coords.lat.toFixed(5)}, ${locateResult.coords.lng.toFixed(5)}），園區資料共 ${loadedPoints.length} 個點位。`,
+          );
+          return;
+        }
+
+        if (locateResult.reason === "permission_denied") {
+          setStatusText(
+            `地圖載入完成，共 ${loadedPoints.length} 個點位。未取得定位權限，請允許瀏覽器位置存取。`,
+          );
+          return;
+        }
+
+        if (locateResult.reason === "not_supported") {
+          setStatusText(
+            `地圖載入完成，共 ${loadedPoints.length} 個點位。此裝置或瀏覽器不支援定位。`,
+          );
+          return;
+        }
+
+        if (locateResult.reason === "insecure_context") {
+          setStatusText(
+            `地圖載入完成，共 ${loadedPoints.length} 個點位。定位需在 HTTPS（或 localhost）環境下使用。`,
+          );
+          return;
+        }
+
         setStatusText(
-          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
+          `地圖載入完成，共 ${loadedPoints.length} 個點位。定位失敗，已顯示園區預設範圍。`,
         );
       } catch {
         if (!cancelled) {
@@ -126,6 +219,8 @@ export function TownPassMap() {
       cancelled = true;
       markersRef.current.forEach((entry) => entry.marker.setMap(null));
       markersRef.current = [];
+      userMarkerRef.current?.setMap(null);
+      userMarkerRef.current = null;
       infoWindowRef.current = null;
       mapRef.current = null;
     };
@@ -184,13 +279,39 @@ export function TownPassMap() {
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
 
-    if (visiblePoints.length > 1) {
+    if (!userPosition && visiblePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 48);
-    } else if (visiblePoints.length === 1) {
+    } else if (!userPosition && visiblePoints.length === 1) {
       mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
       mapRef.current.setZoom(18);
     }
-  }, [allPoints, layers]);
+  }, [allPoints, layers, userPosition]);
+
+  useEffect(() => {
+    const maps = getMapsNamespace();
+    if (!mapRef.current || !maps || !userPosition) {
+      return;
+    }
+
+    mapRef.current.panTo(userPosition);
+    mapRef.current.setZoom(18);
+
+    userMarkerRef.current?.setMap(null);
+    userMarkerRef.current = new maps.Marker({
+      position: userPosition,
+      map: mapRef.current,
+      title: "你的位置",
+      icon: {
+        path: maps.SymbolPath.CIRCLE,
+        scale: 9,
+        fillColor: "#2563eb",
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 3,
+      },
+      zIndex: 999,
+    });
+  }, [userPosition]);
 
   const summaryText = useMemo(() => {
     const facilityCount = allPoints.filter((point) => point.pointType === "facility").length;
@@ -238,6 +359,11 @@ export function TownPassMap() {
       </div>
 
       <p className="text-xs text-grayscale-600">{statusText}</p>
+      {userPosition && (
+        <p className="text-[11px] text-grayscale-500">
+          目前定位座標：{userPosition.lat.toFixed(5)}, {userPosition.lng.toFixed(5)}
+        </p>
+      )}
     </section>
   );
 }

@@ -27,7 +27,7 @@ export default function RootLayout({
           <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden rounded-[2.5rem] bg-black p-2 shadow-[0_20px_64px_rgba(2,6,23,0.45)] md:h-[860px]">
             <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-surface text-on-surface">
               <TopAppBar />
-              <main className="flex-1 overflow-y-auto overscroll-contain">
+              <main className="absolute inset-x-0 bottom-[80px] top-16 overflow-y-auto overscroll-contain">
                 {children}
               </main>
               <BottomNavBar />

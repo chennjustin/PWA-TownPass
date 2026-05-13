@@ -2,7 +2,7 @@ import { TownPassMap } from "@/src/components/map/townpass-map";
 
 export default function Page() {
   return (
-    <div className="h-full overflow-y-auto px-4 pb-24 pt-16">
+    <div className="px-4 pb-6 pt-2">
       <div className="mb-4">
         <h1 className="font-display text-xl font-semibold text-grayscale-900">
           園區地圖
