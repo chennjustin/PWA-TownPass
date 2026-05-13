@@ -22,11 +22,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-Hant">
-      <body>
-        <div className="min-h-screen bg-surface flex flex-col">
-          <TopAppBar />
-          <main className="flex-1 overflow-hidden">{children}</main>
-          <BottomNavBar />
+      <body className="bg-slate-200">
+        <div className="flex min-h-screen w-full items-center justify-center p-2 md:p-6">
+          <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden rounded-[2.5rem] bg-black p-2 shadow-[0_20px_64px_rgba(2,6,23,0.45)] md:h-[860px]">
+            <div className="relative flex h-full flex-col overflow-hidden rounded-[2rem] bg-surface text-on-surface">
+              <TopAppBar />
+              <main className="flex-1 overflow-y-auto overscroll-contain">
+                {children}
+              </main>
+              <BottomNavBar />
+            </div>
+          </div>
         </div>
       </body>
     </html>
