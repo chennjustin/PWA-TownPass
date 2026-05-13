@@ -1,6 +1,10 @@
 import Image from 'next/image';
-import { HelpCircle, Bus, Info, Calendar, Users } from 'lucide-react';
+import Link from 'next/link';
+import { HelpCircle, Bus, Info, Calendar, Users, ChevronDown, ArrowRight } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
+import { townPassFaqData } from '@/src/lib/townpass-faq-data';
+
+const homeQuickFaqs = townPassFaqData.filter((item) => item.featured).slice(0, 4);
 
 export function HomePage() {
   return (
@@ -24,17 +28,21 @@ export function HomePage() {
       {/* Service Grid */}
       <section className="grid grid-cols-4 gap-2">
         {[
-          { icon: HelpCircle, label: '常見問題' },
-          { icon: Bus, label: '交通方式' },
-          { icon: Info, label: '遊園資訊' },
-          { icon: Calendar, label: '設施預約' },
+          { icon: HelpCircle, label: '常見問題', href: '/faq' },
+          { icon: Bus, label: '交通方式', href: '/faq' },
+          { icon: Info, label: '遊園資訊', href: '/faq' },
+          { icon: Calendar, label: '設施預約', href: '/events' },
         ].map((item, idx) => (
-          <div key={idx} className="flex flex-col items-center gap-1">
+          <Link
+            key={idx}
+            href={item.href}
+            className="flex flex-col items-center gap-1 transition active:scale-95"
+          >
             <div className="w-14 h-14 bg-white border border-grayscale-100 rounded-full flex items-center justify-center shadow-sm">
               <item.icon className="w-6 h-6 text-primary" />
             </div>
             <span className="text-[10px] text-grayscale-700 font-medium">{item.label}</span>
-          </div>
+          </Link>
         ))}
       </section>
 
@@ -77,6 +85,43 @@ export function HomePage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* FAQ Preview */}
+      <section className="space-y-3">
+        <div className="flex justify-between items-end">
+          <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+          <Link href="/faq" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
+            查看完整 FAQ <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="space-y-2">
+          {homeQuickFaqs.map((faq) => (
+            <details
+              key={faq.id}
+              className="group rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm open:border-primary/30"
+            >
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
+                <div>
+                  <span className="inline-block rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary-700">
+                    {faq.category}
+                  </span>
+                  <h4 className="mt-1 text-sm font-semibold text-grayscale-900">{faq.question}</h4>
+                </div>
+                <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-grayscale-500 transition group-open:rotate-180" />
+              </summary>
+
+              <div className="mt-2 space-y-1 border-t border-grayscale-100 pt-2">
+                {faq.answer.slice(0, 2).map((line, idx) => (
+                  <p key={`${faq.id}-home-${idx}`} className="text-sm text-grayscale-600 leading-relaxed">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </details>
+          ))}
         </div>
       </section>
 
