@@ -4,7 +4,7 @@ import { IMAGES } from '@/src/constants';
 
 export function ProfilePage() {
   return (
-    <div className="pt-14 px-4 space-y-6 pb-24">
+    <div className="pt-16 px-4 space-y-6 pb-24">
       {/* User Header */}
       <section className="mt-4 flex items-center gap-4">
         <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-primary-100">

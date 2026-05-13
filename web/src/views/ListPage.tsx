@@ -5,8 +5,12 @@ import { useState } from 'react';
 import { Search, SlidersHorizontal, ChevronDown, MapPin, ChevronRight, Map as MapIcon, List as ListIcon, Layers, Rocket, Bike, Sparkles, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
 
-export function ListPage() {
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+type ListPageProps = {
+  initialView?: 'list' | 'map';
+};
+
+export function ListPage({ initialView = 'list' }: ListPageProps) {
+  const [viewMode, setViewMode] = useState<'list' | 'map'>(initialView);
 
   const attractions = [
     {
@@ -56,7 +60,7 @@ export function ListPage() {
   ];
 
   return (
-    <div className="pt-14 h-full flex flex-col">
+    <div className="pt-16 h-full flex flex-col">
       {/* Header Controls */}
       <div className="px-4 py-3 space-y-3 bg-surface z-20 shadow-sm border-b border-grayscale-100">
         <div className="flex gap-2 items-center">
