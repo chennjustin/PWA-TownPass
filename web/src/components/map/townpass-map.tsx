@@ -176,11 +176,17 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
+  const userMarkerRef = useRef<GoogleMapsMarker | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
     restaurants: true,
   });
+  const [statusText, setStatusText] = useState(
+    googleMapsApiKey
+      ? "地圖初始化中..."
+      : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
+  );
   const [query, setQuery] = useState("");
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -214,6 +220,7 @@ export function TownPassMap() {
       cancelled = true;
     };
   }, []);
+  const [userPosition] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -267,8 +274,13 @@ export function TownPassMap() {
         }
 
         setAllPoints(loadedPoints);
-      } catch (error) {
-        console.error("Failed to initialize Google Maps", error);
+        setStatusText(
+          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
+        );
+      } catch {
+        if (!cancelled) {
+          setStatusText("Google Maps 載入失敗，請檢查 API Key 或網路。");
+        }
       }
     };
 
@@ -278,6 +290,10 @@ export function TownPassMap() {
       cancelled = true;
       markersRef.current.forEach((entry) => clearMarker(entry.marker));
       markersRef.current = [];
+      if (userMarkerRef.current) {
+        clearMarker(userMarkerRef.current);
+      }
+      userMarkerRef.current = null;
       infoWindowRef.current = null;
       mapRef.current = null;
     };
@@ -374,20 +390,21 @@ export function TownPassMap() {
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
 
-    const focusedPoint = selectedPointId
-      ? visiblePoints.find((point) => point.id === selectedPointId)
-      : null;
-
-    if (focusedPoint) {
-      mapRef.current.panTo({ lat: focusedPoint.lat, lng: focusedPoint.lng });
-      mapRef.current.setZoom(18);
-    } else if (visiblePoints.length > 1) {
+    if (visiblePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 48);
-    } else if (visiblePoints.length === 1) {
+    } else if (!userPosition && visiblePoints.length === 1) {
       mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
       mapRef.current.setZoom(18);
     }
-  }, [selectedPointId, visiblePoints]);
+  }, [selectedPointId, userPosition, visiblePoints]);
+
+  const summaryText = useMemo(() => {
+    const facilityCount = visiblePoints.filter((point) => point.pointType === "facility").length;
+    const restaurantCount = visiblePoints.filter(
+      (point) => point.pointType === "restaurant",
+    ).length;
+    return `設施 ${facilityCount} 筆、餐飲 ${restaurantCount} 筆`;
+  }, [visiblePoints]);
 
   const hasActiveFilters =
     query.trim().length > 0 ||
@@ -402,12 +419,12 @@ export function TownPassMap() {
 
   const selectedFilterTags = selectedPlaceDetail
     ? [
-        selectedPlaceDetail.filters?.height,
-        selectedPlaceDetail.filters?.thrill,
-        ...(selectedPlaceDetail.filters?.environment ?? []),
-        selectedPlaceDetail.filters?.price,
-        ...(selectedPlaceDetail.filters?.special ?? []),
-      ].filter((tag): tag is string => Boolean(tag))
+      selectedPlaceDetail.filters?.height,
+      selectedPlaceDetail.filters?.thrill,
+      ...(selectedPlaceDetail.filters?.environment ?? []),
+      selectedPlaceDetail.filters?.price,
+      ...(selectedPlaceDetail.filters?.special ?? []),
+    ].filter((tag): tag is string => Boolean(tag))
     : [];
 
   const resetFilters = () => {
@@ -444,11 +461,10 @@ export function TownPassMap() {
           </div>
           <button
             onClick={() => setFilterPanelOpen((open) => !open)}
-            className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${
-              filterPanelOpen || hasActiveFilters
+            className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveFilters
                 ? "border-primary bg-primary text-white"
                 : "border-grayscale-100 bg-white text-primary"
-            }`}
+              }`}
             aria-expanded={filterPanelOpen}
             aria-label="開啟地圖篩選器"
           >
@@ -463,11 +479,10 @@ export function TownPassMap() {
                 onClick={() =>
                   setLayers((prev) => ({ ...prev, facilities: !prev.facilities }))
                 }
-                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
-                  layers.facilities
+                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${layers.facilities
                     ? "bg-primary text-white"
                     : "bg-grayscale-100 text-grayscale-700"
-                }`}
+                  }`}
               >
                 設施
               </button>
@@ -475,11 +490,10 @@ export function TownPassMap() {
                 onClick={() =>
                   setLayers((prev) => ({ ...prev, restaurants: !prev.restaurants }))
                 }
-                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
-                  layers.restaurants
+                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${layers.restaurants
                     ? "bg-red-500 text-white"
                     : "bg-grayscale-100 text-grayscale-700"
-                }`}
+                  }`}
               >
                 餐飲
               </button>
@@ -488,11 +502,10 @@ export function TownPassMap() {
                 <select
                   value={selectedCategory ?? ""}
                   onChange={(event) => setSelectedCategory(event.target.value || null)}
-                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${
-                    selectedCategory
+                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${selectedCategory
                       ? "border-primary bg-primary text-white"
                       : "border-grayscale-100 bg-white text-grayscale-700"
-                  }`}
+                    }`}
                 >
                   <option value="">類型</option>
                   {categories.map((category) => (
@@ -510,11 +523,10 @@ export function TownPassMap() {
                   onChange={(event) =>
                     setSelectedFloor(event.target.value ? Number(event.target.value) : null)
                   }
-                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${
-                    selectedFloor !== null
+                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${selectedFloor !== null
                       ? "border-primary bg-primary text-white"
                       : "border-grayscale-100 bg-white text-grayscale-700"
-                  }`}
+                    }`}
                 >
                   <option value="">樓層</option>
                   {floors.map((floor) => (
@@ -542,9 +554,8 @@ export function TownPassMap() {
 
       <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
         <div
-          className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${
-            detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
-          }`}
+          className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
+            }`}
         >
           {selectedPoint && (
             <div className="mb-3 flex justify-end">
@@ -663,9 +674,8 @@ export function TownPassMap() {
                 >
                   <div className="mb-1 flex items-center gap-1">
                     <span
-                      className={`h-2 w-2 rounded-full ${
-                        point.pointType === "facility" ? "bg-primary" : "bg-red-500"
-                      }`}
+                      className={`h-2 w-2 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
+                        }`}
                     />
                     <span className="text-[10px] font-bold text-grayscale-500">
                       {getPointLabel(point.pointType)}
@@ -683,6 +693,8 @@ export function TownPassMap() {
           )}
         </div>
       </div>
+
+      <p className="text-xs text-grayscale-600">{statusText}</p>
     </section>
   );
 }

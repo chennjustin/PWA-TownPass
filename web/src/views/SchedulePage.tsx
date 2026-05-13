@@ -41,7 +41,7 @@ export function SchedulePage() {
   ];
 
   return (
-    <div className="pt-16 px-4 space-y-6 pb-24 h-full overflow-y-auto no-scrollbar">
+    <div className="px-4 space-y-6 pb-6 no-scrollbar">
       {/* Date Toggle */}
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 no-scrollbar pt-2">
         {['今日 05/24', '明日 05/25', '週日 05/26', '週一 05/27'].map((date, idx) => (
