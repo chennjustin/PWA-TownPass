@@ -1,27 +1,179 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
-import { HelpCircle, Info, Calendar, Users, ChevronDown, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { HelpCircle, Info, Calendar, Users, ChevronDown, ArrowRight, Bus, Navigation, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
 import { townPassFaqData } from '@/src/lib/townpass-faq-data';
 
 const homeQuickFaqs = townPassFaqData.filter((item) => item.featured).slice(0, 4);
+const PARK_LAT = 25.0974;
+const PARK_LNG = 121.5151;
+const GOOGLE_MAPS_NAV_URL = `https://www.google.com/maps/dir/?api=1&destination=${PARK_LAT},${PARK_LNG}&travelmode=transit`;
+const recentActivities = [
+  {
+    image: IMAGES.BANNER,
+    title: '夏季嘉年華：星光遊行',
+    subtitle: '每日 19:00 準時開始',
+    tag: '園區主打',
+  },
+  {
+    image: IMAGES.FIREWORKS,
+    title: '週末煙火秀',
+    subtitle: '每週六、日 20:00 登場',
+    tag: '特別演出',
+  },
+  {
+    image: IMAGES.FOOD,
+    title: '美食街 85 折優惠',
+    subtitle: '會員出示 App 即享折扣',
+    tag: '限時優惠',
+  },
+];
+
+const activityCards = [
+  {
+    image: IMAGES.FOOD,
+    title: '美食街 85 折優惠',
+    description: '出示 App 會員即享優惠',
+    tag: '限時優惠',
+    date: '即日起',
+  },
+  {
+    image: IMAGES.FIREWORKS,
+    title: '週末煙火秀',
+    description: '每週六、日晚上 8 點',
+    tag: '特別表演',
+    date: '週末限定',
+  },
+];
 
 export function HomePage() {
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveBannerIndex((current) => (current + 1) % recentActivities.length);
+    }, 4500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const navigateFromCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      window.open(GOOGLE_MAPS_NAV_URL, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&origin=${latitude},${longitude}&destination=${PARK_LAT},${PARK_LNG}&travelmode=transit`,
+          '_blank',
+          'noopener,noreferrer',
+        );
+        setIsLocating(false);
+      },
+      () => {
+        setLocationMessage('未取得目前位置，已改為開啟園區導航頁。');
+        window.open(GOOGLE_MAPS_NAV_URL, '_blank', 'noopener,noreferrer');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   return (
     <div className="px-4 space-y-6 pb-6">
       {/* Banner */}
       <section className="mt-4">
         <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-sm">
-          <Image className="object-cover" src={IMAGES.BANNER} alt="Summer Carnival" fill sizes="100vw" priority />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
-            <h2 className="text-white font-display font-semibold text-lg">夏季嘉年華：星光遊行</h2>
-            <p className="text-white/90 text-xs">每日 19:00 準時開始</p>
+          {recentActivities.map((activity, index) => (
+            <Image
+              key={activity.title}
+              className={`object-cover transition-opacity duration-500 ${
+                activeBannerIndex === index ? 'opacity-100' : 'opacity-0'
+              }`}
+              src={activity.image}
+              alt={activity.title}
+              fill
+              sizes="100vw"
+              priority={index === 0}
+            />
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent flex flex-col justify-end p-4">
+            <span className="inline-flex w-fit rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+              {recentActivities[activeBannerIndex].tag}
+            </span>
+            <h2 className="mt-2 text-white font-display font-semibold text-lg">{recentActivities[activeBannerIndex].title}</h2>
+            <p className="text-white/90 text-xs">{recentActivities[activeBannerIndex].subtitle}</p>
           </div>
+          <button
+            onClick={() =>
+              setActiveBannerIndex((current) =>
+                current === 0 ? recentActivities.length - 1 : current - 1,
+              )
+            }
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm transition active:scale-95"
+            aria-label="上一則活動"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setActiveBannerIndex((current) => (current + 1) % recentActivities.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm transition active:scale-95"
+            aria-label="下一則活動"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            <div className="w-3 h-1 bg-primary-500 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-grayscale-300 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-grayscale-300 rounded-full" />
+            {recentActivities.map((activity, index) => (
+              <button
+                key={`dot-${activity.title}`}
+                onClick={() => setActiveBannerIndex(index)}
+                className={`h-1.5 rounded-full transition-all ${
+                  activeBannerIndex === index ? 'w-5 bg-white' : 'w-1.5 bg-white/55'
+                }`}
+                aria-label={`切換到活動 ${index + 1}`}
+              />
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* Transport */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-1">
+          <h3 className="font-display font-semibold text-lg text-grayscale-900">交通方式</h3>
+          <Bus className="h-4 w-4 text-primary" />
+        </div>
+
+        <div className="space-y-2 border-y border-grayscale-100 py-3">
+          <div className="flex items-start gap-2 text-sm text-grayscale-700">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="font-semibold text-grayscale-900">兒童新樂園</p>
+              <p>台北市士林區承德路五段 55 號（近劍潭／士林站）</p>
+              <button
+                onClick={navigateFromCurrentLocation}
+                disabled={isLocating}
+                className="mt-2 inline-flex items-center gap-1 border border-primary px-3 py-2 text-xs font-semibold text-primary transition disabled:opacity-60 active:scale-95"
+              >
+                <Navigation className="h-3.5 w-3.5" />
+                {isLocating ? '定位中...' : '從目前位置導航'}
+              </button>
+            </div>
+          </div>
+          {locationMessage && <p className="text-xs text-grayscale-500">{locationMessage}</p>}
         </div>
       </section>
 
@@ -116,27 +268,35 @@ export function HomePage() {
           <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
           <Calendar className="ml-1 h-4 w-4 text-primary" />
         </div>
-        <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 no-scrollbar snap-x">
-          <div className="flex-shrink-0 w-72 bg-white border border-grayscale-100 rounded-xl overflow-hidden snap-start shadow-sm">
-            <div className="relative h-40">
-              <Image className="object-cover" src={IMAGES.FOOD} alt="Food Discount" fill sizes="288px" />
-            </div>
-            <div className="p-3 space-y-1">
-              <span className="inline-block px-2 py-0.5 bg-orange-500/10 text-orange-500 text-[10px] font-bold rounded-full">限時優惠</span>
-              <h4 className="font-display font-semibold text-grayscale-900">美食街 85 折優惠</h4>
-              <p className="text-grayscale-500 text-sm">出示 App 會員即享優惠</p>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-72 bg-white border border-grayscale-100 rounded-xl overflow-hidden snap-start shadow-sm">
-            <div className="relative h-40">
-              <Image className="object-cover" src={IMAGES.FIREWORKS} alt="Fireworks" fill sizes="288px" />
-            </div>
-            <div className="p-3 space-y-1">
-              <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-bold rounded-full">特別表演</span>
-              <h4 className="font-display font-semibold text-grayscale-900">週末煙火秀</h4>
-              <p className="text-grayscale-500 text-sm">每週六、日晚上 8 點</p>
-            </div>
-          </div>
+        <div className="flex overflow-x-auto gap-4 pb-4 pl-1 pr-1 no-scrollbar snap-x snap-mandatory">
+          {activityCards.map((activity) => (
+            <article
+              key={activity.title}
+              className="flex-shrink-0 w-[86%] border border-grayscale-100 bg-white snap-start overflow-hidden shadow-sm"
+            >
+              <div className="relative h-44">
+                <Image className="object-cover" src={activity.image} alt={activity.title} fill sizes="320px" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                <div className="absolute left-3 top-3 inline-flex items-center gap-1 bg-white/90 px-2 py-1 text-[10px] font-semibold text-grayscale-700">
+                  <Calendar className="h-3 w-3 text-primary" />
+                  {activity.date}
+                </div>
+                <div className="absolute left-3 right-3 bottom-3">
+                  <span className="inline-flex bg-primary/90 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {activity.tag}
+                  </span>
+                  <h4 className="mt-2 font-display text-2xl font-semibold text-white">{activity.title}</h4>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <p className="text-sm text-grayscale-600">{activity.description}</p>
+                <button className="inline-flex shrink-0 items-center gap-1 border border-primary px-2.5 py-1.5 text-xs font-semibold text-primary transition active:scale-95">
+                  立即查看
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
     </div>
