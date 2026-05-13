@@ -97,3 +97,61 @@ async function fetchPointsFromGeoJson(
       };
     });
 }
+
+export type RideFilterState = {
+  height: string | null;
+  thrill: string | null;
+  environment: string | null;
+  price: string | null;
+  special: string | null;
+};
+
+export type PlaceDetail = {
+  name: string;
+  aliases?: string[];
+  category: string;
+  description: string;
+  filters?: {
+    height?: string | null;
+    thrill?: string | null;
+    environment?: string[];
+    price?: string | null;
+    special?: string[];
+  };
+};
+
+export type PlaceDetailsResponse = {
+  places?: PlaceDetail[];
+};
+
+export const PLACE_DETAILS_URL = "/place-details.json";
+
+export const heightFilterOptions = [
+  "幼童友善（未滿 90cm）",
+  "小學門檻（90cm-110cm）",
+  "刺激挑戰（110cm 以上）",
+];
+
+export const thrillFilterOptions = ["溫和型", "中度刺激", "高刺激"];
+export const environmentFilterOptions = ["露天", "頂棚區"];
+export const priceFilterOptions = ["🎠 基礎遊具（20～30 元）", "⭐ 委外精選設施（50～80 元）"];
+export const specialFilterOptions = ["🤰 孕婦可搭乘", "♿ 無障礙標示", "❄️ 冷氣開放"];
+
+export const defaultRideFilters: RideFilterState = {
+  height: null,
+  thrill: null,
+  environment: null,
+  price: null,
+  special: null,
+};
+
+const facilityWaitSamples = [15, 25, 35, 45, 5];
+
+export function getFacilityWaitMinutes(point: TownPassPoint | { id: string }) {
+  const hash = Array.from(point.id).reduce(
+    (total, char) => total + char.charCodeAt(0),
+    0,
+  );
+  return facilityWaitSamples[hash % facilityWaitSamples.length];
+}
+

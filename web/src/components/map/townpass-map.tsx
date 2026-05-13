@@ -21,6 +21,17 @@ import {
   parkBounds,
   parkCenter,
   type TownPassPoint,
+  type RideFilterState,
+  type PlaceDetail,
+  type PlaceDetailsResponse,
+  PLACE_DETAILS_URL,
+  heightFilterOptions,
+  thrillFilterOptions,
+  environmentFilterOptions,
+  priceFilterOptions,
+  specialFilterOptions,
+  defaultRideFilters,
+  getFacilityWaitMinutes
 } from "@/src/lib/townpass-map-data";
 
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -35,6 +46,8 @@ type GoogleMapsMap = {
 type GoogleMapsLegacyMarker = {
   addListener: (eventName: string, callback: () => void) => void;
   setMap: (map: GoogleMapsMap | null) => void;
+  setIcon: (icon: any) => void;
+  setZIndex: (zIndex: number) => void;
 };
 
 type GoogleMapsInfoWindow = {
@@ -64,13 +77,7 @@ type MapLayerState = {
 
 type MapContentType = "facility" | "restaurant" | "shop";
 
-type RideFilterState = {
-  height: string | null;
-  thrill: string | null;
-  environment: string | null;
-  price: string | null;
-  special: string | null;
-};
+
 
 type MarkerEntry = {
   marker: GoogleMapsLegacyMarker;
@@ -79,25 +86,7 @@ type MarkerEntry = {
 
 type MarkerKind = "restaurant" | "shop" | "ferrisWheel";
 
-type PlaceDetail = {
-  name: string;
-  aliases?: string[];
-  category: string;
-  description: string;
-  filters?: {
-    height?: string | null;
-    thrill?: string | null;
-    environment?: string[];
-    price?: string | null;
-    special?: string[];
-  };
-};
 
-type PlaceDetailsResponse = {
-  places?: PlaceDetail[];
-};
-
-const PLACE_DETAILS_URL = "/place-details.json";
 
 const contentTypeOptions: Array<{
   value: MapContentType;
@@ -109,24 +98,7 @@ const contentTypeOptions: Array<{
   { value: "shop", label: "商店", Icon: ShoppingBag },
 ];
 
-const heightFilterOptions = [
-  "幼童友善（未滿 90cm）",
-  "小學門檻（90cm-110cm）",
-  "刺激挑戰（110cm 以上）",
-];
 
-const thrillFilterOptions = ["溫和型", "中度刺激", "高刺激"];
-const environmentFilterOptions = ["露天", "頂棚區"];
-const priceFilterOptions = ["🎠 基礎遊具（20～30 元）", "⭐ 委外精選設施（50～80 元）"];
-const specialFilterOptions = ["🤰 孕婦可搭乘", "♿ 無障礙標示", "❄️ 冷氣開放"];
-
-const defaultRideFilters: RideFilterState = {
-  height: null,
-  thrill: null,
-  environment: null,
-  price: null,
-  special: null,
-};
 
 function normalizePlaceName(name: string) {
   return name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
@@ -228,15 +200,7 @@ function getMarkerIconPath(kind: MarkerKind) {
   }
 }
 
-const facilityWaitSamples = [15, 25, 35, 45, 5];
 
-function getFacilityWaitMinutes(point: TownPassPoint) {
-  const hash = Array.from(point.id).reduce(
-    (total, char) => total + char.charCodeAt(0),
-    0,
-  );
-  return facilityWaitSamples[hash % facilityWaitSamples.length];
-}
 
 function getParkOperatingStatus(date: Date) {
   const day = date.getDay();
@@ -310,6 +274,7 @@ export function TownPassMap() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<TownPassPoint | null>(null);
+  const [activeCarouselPointId, setActiveCarouselPointId] = useState<string | null>(null);
   const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
   const [placeDetails, setPlaceDetails] = useState<PlaceDetail[]>([]);
@@ -520,7 +485,7 @@ export function TownPassMap() {
     }
 
     setSelectedPoint(point);
-    setDetailSheetExpanded(false);
+    setDetailSheetExpanded(true);
     mapRef.current.panTo({ lat: point.lat, lng: point.lng });
     infoWindowRef.current?.close();
   };
@@ -546,9 +511,17 @@ export function TownPassMap() {
       });
 
       marker.addListener("click", () => {
-        setSelectedPoint(point);
-        setDetailSheetExpanded(false);
         mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
+        const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
+        if (pointIndex !== -1) {
+          const container = document.getElementById("map-carousel-container");
+          if (container) {
+            container.scrollTo({
+              left: pointIndex * container.offsetWidth,
+              behavior: "smooth",
+            });
+          }
+        }
         infoWindowRef.current?.close();
       });
 
@@ -569,6 +542,22 @@ export function TownPassMap() {
       mapRef.current.setZoom(18);
     }
   }, [selectedPointId, userPosition, visiblePoints]);
+
+  useEffect(() => {
+    const maps = getMapsNamespace();
+    if (!maps) return;
+
+    const actualActiveId = selectedPointId ?? activeCarouselPointId ?? visiblePoints[0]?.id ?? null;
+
+    markersRef.current.forEach((entry) => {
+      const point = visiblePoints.find((p) => p.id === entry.pointId);
+      if (point) {
+        const isSelected = point.id === actualActiveId;
+        entry.marker.setIcon(createMapMarkerIcon(point, isSelected, maps));
+        entry.marker.setZIndex(isSelected ? 1000 : 1);
+      }
+    });
+  }, [selectedPointId, activeCarouselPointId, visiblePoints]);
 
   const hasActiveRideFilters =
     childHeight.trim().length > 0 ||
@@ -676,23 +665,24 @@ export function TownPassMap() {
               placeholder="搜尋設施、餐廳或類型"
             />
           </div>
-          <button
-            onClick={() => setFilterPanelOpen((open) => !open)}
-            className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveFilters
-                ? "border-primary bg-primary text-white"
-                : "border-grayscale-100 bg-white text-primary"
-              }`}
-            aria-expanded={filterPanelOpen}
-            aria-label="開啟地圖篩選器"
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-          </button>
+          {selectedContentType === "facility" && (
+            <button
+              onClick={() => setFilterPanelOpen((open) => !open)}
+              className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveFilters
+                  ? "border-primary bg-primary text-white"
+                  : "border-grayscale-100 bg-white text-primary"
+                }`}
+              aria-expanded={filterPanelOpen}
+              aria-label="開啟地圖篩選器"
+            >
+              <SlidersHorizontal className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
-        {filterPanelOpen && (
+        {filterPanelOpen && selectedContentType === "facility" && (
           <div className="space-y-2 rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
-            {selectedContentType === "facility" && (
-              <div className="space-y-3">
+            <div className="space-y-3">
                 <div className="flex gap-2 overflow-x-auto no-scrollbar">
                   <label className="relative shrink-0">
                     <select
@@ -790,9 +780,6 @@ export function TownPassMap() {
                   </label>
                 </div>
               </div>
-            )}
-
-
 
             <div className="flex justify-end">
               <button
@@ -858,18 +845,9 @@ export function TownPassMap() {
                   {selectedWaitMinutes !== null && (
                     <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary">
                       <Clock className="h-3.5 w-3.5" />
-                      {selectedOperatingStatus.isOpen
-                        ? `等待 ${selectedWaitMinutes} 分鐘`
-                        : selectedOperatingStatus.label}
+                      等待 {selectedWaitMinutes} 分鐘
                     </p>
                   )}
-                </button>
-                <button
-                  onClick={() => focusPoint(selectedPoint)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-white active:scale-95"
-                  aria-label="定位到已選點位"
-                >
-                  <Navigation className="h-5 w-5" />
                 </button>
               </div>
 
@@ -948,14 +926,18 @@ export function TownPassMap() {
             </div>
           ) : (
             <div 
+              id="map-carousel-container"
               className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory"
               onScroll={(e) => {
                 const container = e.currentTarget;
                 const index = Math.round(container.scrollLeft / container.offsetWidth);
                 const activePoint = visiblePoints[index];
-                if (activePoint && mapRef.current && container.dataset.activeIndex !== String(index)) {
+                if (activePoint && container.dataset.activeIndex !== String(index)) {
                   container.dataset.activeIndex = String(index);
-                  mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+                  if (mapRef.current) {
+                    mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+                  }
+                  setActiveCarouselPointId(activePoint.id);
                 }
               }}
             >
@@ -978,7 +960,9 @@ export function TownPassMap() {
                     {point.name}
                   </p>
                   <p className="mt-1 truncate text-xs font-medium text-grayscale-500">
-                    {point.category}
+                    {point.pointType === "facility"
+                      ? `等待 ${getFacilityWaitMinutes(point)} 分鐘`
+                      : point.category}
                   </p>
                 </button>
               ))}

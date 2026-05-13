@@ -4,7 +4,20 @@ import Image from 'next/image';
 import { type ComponentType, useEffect, useMemo, useState } from 'react';
 import { Search, SlidersHorizontal, ChevronDown, MapPin, ChevronRight, Layers, Rocket, Bike, Sparkles, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
-import { loadTownPassPoints } from '@/src/lib/townpass-map-data';
+import {
+  loadTownPassPoints,
+  getFacilityWaitMinutes,
+  type RideFilterState,
+  type PlaceDetail,
+  type PlaceDetailsResponse,
+  PLACE_DETAILS_URL,
+  heightFilterOptions,
+  thrillFilterOptions,
+  environmentFilterOptions,
+  priceFilterOptions,
+  specialFilterOptions,
+  defaultRideFilters,
+} from '@/src/lib/townpass-map-data';
 
 type ListPageProps = {
   initialView?: 'list' | 'map';
@@ -18,10 +31,9 @@ type Attraction = {
   tag: string;
   restriction: string;
   area: string;
-  floor: number | null;
-  dist: string;
   image: string;
   icon: ComponentType<{ className?: string }>;
+  filters?: PlaceDetail['filters'];
 };
 
 const fallbackAttractions: Attraction[] = [
@@ -88,41 +100,57 @@ const attractionImages = [
 
 const attractionIcons = [Rocket, Sparkles, Layers, Bike];
 
-const sampleWaits = [15, 25, 35, 45, 5];
-
 export function ListPage({ initialView = 'list' }: ListPageProps) {
   const viewMode = initialView;
   const [attractions, setAttractions] = useState<Attraction[]>(fallbackAttractions);
   const [query, setQuery] = useState('');
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+  const [rideFilters, setRideFilters] = useState<RideFilterState>(defaultRideFilters);
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadFacilities = async () => {
+    const loadData = async () => {
       try {
-        const { facilityPoints } = await loadTownPassPoints();
+        const [{ facilityPoints }, detailsRes] = await Promise.all([
+          loadTownPassPoints(),
+          fetch(PLACE_DETAILS_URL, { cache: "no-store" }).catch(() => null),
+        ]);
+
         if (cancelled || facilityPoints.length === 0) {
           return;
         }
 
+        const detailsMap = new Map<string, PlaceDetail>();
+        if (detailsRes && detailsRes.ok) {
+          const detailsData = (await detailsRes.json()) as PlaceDetailsResponse;
+          for (const place of detailsData.places ?? []) {
+            const name = place.name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
+            detailsMap.set(name, place);
+          }
+        }
+
         setAttractions(
-          facilityPoints.map((point, index) => ({
-            id: point.id,
-            name: point.name,
-            waitMinutes: sampleWaits[index % sampleWaits.length],
-            wait: `${sampleWaits[index % sampleWaits.length]} 分鐘`,
-            tag: point.category,
-            restriction: '無限制',
-            area: typeof point.floor === 'number' ? `${point.floor} 樓` : '園區設施',
-            floor: point.floor ?? null,
-            dist: `${Math.max(80, Math.round(index * 35 + 100))}m`,
-            image: attractionImages[index % attractionImages.length],
-            icon: attractionIcons[index % attractionIcons.length],
-          })),
+          facilityPoints.map((point, index) => {
+            const normalizedName = point.name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
+            const detail = detailsMap.get(normalizedName);
+            const waitMin = getFacilityWaitMinutes(point);
+            return {
+              id: point.id,
+              name: point.name,
+              waitMinutes: waitMin,
+              wait: `${waitMin} 分鐘`,
+              tag: point.category,
+              restriction: detail?.filters?.height ?? '無限制',
+              area: typeof point.floor === 'number' ? `${point.floor} 樓` : '園區設施',
+              floor: point.floor ?? null,
+              dist: `${Math.max(80, Math.round(index * 35 + 100))}m`,
+              image: attractionImages[index % attractionImages.length],
+              icon: attractionIcons[index % attractionIcons.length],
+              filters: detail?.filters,
+            };
+          }),
         );
       } catch {
         if (!cancelled) {
@@ -131,29 +159,12 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
       }
     };
 
-    loadFacilities();
+    loadData();
 
     return () => {
       cancelled = true;
     };
   }, []);
-
-  const categories = useMemo(
-    () => Array.from(new Set(attractions.map((attr) => attr.tag))).filter(Boolean),
-    [attractions],
-  );
-
-  const floors = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          attractions
-            .map((attr) => attr.floor)
-            .filter((floor): floor is number => typeof floor === 'number'),
-        ),
-      ).sort((a, b) => a - b),
-    [attractions],
-  );
 
   const visibleAttractions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -163,10 +174,37 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
         normalizedQuery.length === 0 ||
         attr.name.toLowerCase().includes(normalizedQuery) ||
         attr.tag.toLowerCase().includes(normalizedQuery);
-      const matchesCategory = !selectedCategory || attr.tag === selectedCategory;
-      const matchesFloor = selectedFloor === null || attr.floor === selectedFloor;
+      
+      if (!matchesQuery) return false;
 
-      return matchesQuery && matchesCategory && matchesFloor;
+      const filters = attr.filters;
+      
+      const checkTextFilter = (value: string | null | undefined, filter: string | null) => {
+        if (!filter) return true;
+        if (!value) return false;
+        return value.includes(filter) ||
+          (filter.includes("幼童友善") && value.includes("幼童友善")) ||
+          (filter.includes("小學門檻") && value.includes("小學門檻")) ||
+          (filter.includes("刺激挑戰") && value.includes("刺激挑戰"));
+      };
+
+      const checkListFilter = (values: string[] | undefined, filter: string | null) => {
+        if (!filter) return true;
+        return Boolean(values?.some((value) => value.includes(filter)));
+      };
+
+      const combinedSpecial = [
+        ...(filters?.special ?? []),
+        ...(filters?.environment ?? []),
+      ];
+
+      if (!checkTextFilter(filters?.height, rideFilters.height)) return false;
+      if (!checkTextFilter(filters?.thrill, rideFilters.thrill)) return false;
+      if (!checkListFilter(filters?.environment, rideFilters.environment)) return false;
+      if (!checkTextFilter(filters?.price, rideFilters.price)) return false;
+      if (!checkListFilter(combinedSpecial, rideFilters.special)) return false;
+
+      return true;
     });
 
     if (!sortDirection) {
@@ -178,20 +216,25 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
         ? a.waitMinutes - b.waitMinutes
         : b.waitMinutes - a.waitMinutes,
     );
-  }, [attractions, query, selectedCategory, selectedFloor, sortDirection]);
+  }, [attractions, query, rideFilters, sortDirection]);
 
   const resetFilters = () => {
     setQuery('');
     setSortDirection(null);
-    setSelectedCategory(null);
-    setSelectedFloor(null);
+    setRideFilters(defaultRideFilters);
   };
 
   const hasActiveFilters =
     query.trim().length > 0 ||
     sortDirection !== null ||
-    selectedCategory !== null ||
-    selectedFloor !== null;
+    Object.values(rideFilters).some((value) => value !== null);
+
+  const setRideFilter = (key: keyof RideFilterState, value: string) => {
+    setRideFilters((prev) => ({
+      ...prev,
+      [key]: value === "" ? null : value,
+    }));
+  };
 
   const selectClassName = (active: boolean) =>
     `h-10 appearance-none rounded-full border px-4 pr-9 text-sm font-semibold outline-none transition ${
@@ -251,15 +294,13 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
 
             <label className="relative shrink-0">
               <select
-                value={selectedCategory ?? ''}
-                onChange={(event) => setSelectedCategory(event.target.value || null)}
-                className={selectClassName(selectedCategory !== null)}
+                value={rideFilters.height ?? ""}
+                onChange={(event) => setRideFilter("height", event.target.value)}
+                className={selectClassName(rideFilters.height !== null)}
               >
-                <option value="">設施類型</option>
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
+                <option value="">身高限制</option>
+                {heightFilterOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
@@ -267,17 +308,55 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
 
             <label className="relative shrink-0">
               <select
-                value={selectedFloor ?? ''}
-                onChange={(event) =>
-                  setSelectedFloor(event.target.value ? Number(event.target.value) : null)
-                }
-                className={selectClassName(selectedFloor !== null)}
+                value={rideFilters.thrill ?? ""}
+                onChange={(event) => setRideFilter("thrill", event.target.value)}
+                className={selectClassName(rideFilters.thrill !== null)}
               >
-                <option value="">樓層</option>
-                {floors.map((floor) => (
-                  <option key={floor} value={floor}>
-                    {floor} 樓
-                  </option>
+                <option value="">尖叫指數</option>
+                {thrillFilterOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <label className="relative shrink-0">
+              <select
+                value={rideFilters.environment ?? ""}
+                onChange={(event) => setRideFilter("environment", event.target.value)}
+                className={selectClassName(rideFilters.environment !== null)}
+              >
+                <option value="">室內外</option>
+                {environmentFilterOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <label className="relative shrink-0">
+              <select
+                value={rideFilters.price ?? ""}
+                onChange={(event) => setRideFilter("price", event.target.value)}
+                className={selectClassName(rideFilters.price !== null)}
+              >
+                <option value="">票價／類型</option>
+                {priceFilterOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <label className="relative shrink-0">
+              <select
+                value={rideFilters.special ?? ""}
+                onChange={(event) => setRideFilter("special", event.target.value)}
+                className={selectClassName(rideFilters.special !== null)}
+              >
+                <option value="">特殊族群</option>
+                {specialFilterOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />

@@ -4,8 +4,8 @@ import { TopAppBar } from '@/src/components/TopAppBar';
 import { BottomNavBar } from '@/src/components/BottomNavBar';
 
 export const metadata: Metadata = {
-  title: '台北樂園通',
-  description: '台北樂園通 PWA',
+  title: '台北迪士尼',
+  description: '台北迪士尼 PWA',
   manifest: '/manifest.webmanifest',
 };
 

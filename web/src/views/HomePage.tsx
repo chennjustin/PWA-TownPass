@@ -44,19 +44,21 @@ export function HomePage() {
           <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
           <span className="text-primary font-semibold text-sm">查看更多</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-1 bg-white border border-grayscale-100 p-4 rounded-xl flex flex-col justify-between h-32">
+        <div className="flex flex-col gap-4">
+          <div className="bg-white border border-grayscale-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
             <div>
-              <p className="text-grayscale-500 text-xs font-medium">今日入園狀態</p>
-              <p className="text-2xl font-display font-semibold text-primary mt-1">舒適</p>
+              <p className="text-grayscale-500 text-xs font-medium mb-1">今日入園狀態</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-3xl font-display font-semibold text-primary">舒適</p>
+                <span className="text-xs font-semibold text-grayscale-500 flex items-center gap-1">預估 3,500 人</span>
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary-500" />
-              <span className="text-sm text-grayscale-700">預估人數：3,500</span>
+            <div className="w-12 h-12 bg-primary-50 rounded-full flex items-center justify-center">
+              <Users className="w-6 h-6 text-primary" />
             </div>
           </div>
-          <div className="md:col-span-2 bg-white border border-grayscale-100 rounded-xl overflow-hidden">
-            <div className="p-3 bg-primary-50 border-b border-grayscale-100">
+          <div className="bg-white border border-grayscale-100 rounded-xl overflow-hidden shadow-sm">
+            <div className="p-3 bg-primary-50 border-b border-grayscale-100 flex justify-between items-center">
               <p className="text-primary font-semibold text-sm">最短排隊設施</p>
             </div>
             <div className="divide-y divide-grayscale-100">
