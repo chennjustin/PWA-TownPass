@@ -9,7 +9,7 @@ export function TopAppBar() {
       <div className="flex h-9 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-2">
           <Trees className="h-5 w-5 text-primary" />
-          <h1 className="truncate font-display text-lg font-medium text-primary">台北樂園通</h1>
+          <h1 className="truncate font-display text-lg font-medium text-primary">台北迪士尼</h1>
         </div>
         <button className="p-1 text-grayscale-700 transition-transform hover:opacity-80 active:scale-95">
           <Bell className="h-5 w-5" />

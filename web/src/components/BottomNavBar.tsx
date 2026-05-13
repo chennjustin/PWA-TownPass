@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, List, Map, Calendar, User } from 'lucide-react';
+import { Home, List, Map, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/src/lib/utils';
@@ -12,7 +12,6 @@ export function BottomNavBar() {
     { icon: List, label: '設施列表', path: '/facilities' },
     { icon: Map, label: '地圖', path: '/map' },
     { icon: Calendar, label: '活動', path: '/events' },
-    { icon: User, label: '我的', path: '/profile' },
   ];
 
   return (
