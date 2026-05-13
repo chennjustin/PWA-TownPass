@@ -19,17 +19,10 @@ type GoogleMapsMap = {
   setZoom: (zoom: number) => void;
 };
 
-type GoogleMapsAdvancedMarker = {
-  addListener: (eventName: string, callback: () => void) => void;
-  map: GoogleMapsMap | null;
-};
-
 type GoogleMapsLegacyMarker = {
   addListener: (eventName: string, callback: () => void) => void;
   setMap: (map: GoogleMapsMap | null) => void;
 };
-
-type GoogleMapsMarker = GoogleMapsAdvancedMarker | GoogleMapsLegacyMarker;
 
 type GoogleMapsInfoWindow = {
   close: () => void;
@@ -47,10 +40,8 @@ type GoogleMapsNamespace = {
   Marker: new (options: Record<string, unknown>) => GoogleMapsLegacyMarker;
   InfoWindow: new () => GoogleMapsInfoWindow;
   LatLngBounds: new () => GoogleMapsLatLngBounds;
+  Point: new (x: number, y: number) => unknown;
   Size: new (width: number, height: number) => unknown;
-  marker?: {
-    AdvancedMarkerElement: new (options: Record<string, unknown>) => GoogleMapsAdvancedMarker;
-  };
 };
 
 type MapLayerState = {
@@ -59,9 +50,44 @@ type MapLayerState = {
 };
 
 type MarkerEntry = {
-  marker: GoogleMapsMarker;
+  marker: GoogleMapsLegacyMarker;
   pointId: string;
 };
+
+type MarkerKind =
+  | "firstAid"
+  | "restaurant"
+  | "store"
+  | "info"
+  | "carousel"
+  | "shop"
+  | "restroom"
+  | "ferrisWheel"
+  | "coaster";
+
+type PlaceDetail = {
+  name: string;
+  aliases?: string[];
+  category: string;
+  description: string;
+  filters?: {
+    height?: string | null;
+    thrill?: string | null;
+    environment?: string[];
+    price?: string | null;
+    special?: string[];
+  };
+};
+
+type PlaceDetailsResponse = {
+  places?: PlaceDetail[];
+};
+
+const PLACE_DETAILS_URL = "/place-details.json";
+
+function normalizePlaceName(name: string) {
+  return name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
+}
 
 function getMapsNamespace(): GoogleMapsNamespace | null {
   const maps = window.google?.maps;
@@ -79,71 +105,70 @@ function getFloorText(floor?: number | null) {
   return typeof floor === "number" ? `${floor} 樓` : "樓層未標示";
 }
 
-function createMarkerContent(point: TownPassPoint) {
-  const marker = document.createElement("div");
-  const isFacility = point.pointType === "facility";
-  marker.style.width = "34px";
-  marker.style.height = "34px";
-  marker.style.borderRadius = "9999px";
-  marker.style.background = isFacility ? "#006876" : "#ef4444";
-  marker.style.border = "2px solid white";
-  marker.style.boxShadow = "0 6px 14px rgba(11,13,14,0.22)";
-  marker.style.display = "flex";
-  marker.style.alignItems = "center";
-  marker.style.justifyContent = "center";
-  marker.style.color = "white";
-  marker.style.fontSize = "12px";
-  marker.style.fontWeight = "800";
-  marker.textContent = isFacility ? "設" : "餐";
-  return marker;
+function clearMarker(marker: GoogleMapsLegacyMarker) {
+  marker.setMap(null);
 }
 
-function createSelectedMarkerContent(point: TownPassPoint) {
-  const wrapper = document.createElement("div");
-  const isFacility = point.pointType === "facility";
-  const color = isFacility ? "#006876" : "#ef4444";
-  wrapper.style.position = "relative";
-  wrapper.style.width = "54px";
-  wrapper.style.height = "54px";
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "center";
-  wrapper.style.justifyContent = "center";
+function getMarkerKind(point: TownPassPoint): MarkerKind {
+  const text = `${point.name}${point.category}`.toLowerCase();
 
-  const pulse = document.createElement("div");
-  pulse.style.position = "absolute";
-  pulse.style.inset = "0";
-  pulse.style.borderRadius = "9999px";
-  pulse.style.background = color;
-  pulse.style.opacity = "0.18";
-  pulse.style.animation = "townpassMarkerPulse 1.25s ease-out infinite";
-
-  const core = document.createElement("div");
-  core.style.width = "42px";
-  core.style.height = "42px";
-  core.style.borderRadius = "9999px";
-  core.style.background = color;
-  core.style.border = "3px solid white";
-  core.style.boxShadow = "0 10px 24px rgba(11,13,14,0.32)";
-  core.style.display = "flex";
-  core.style.alignItems = "center";
-  core.style.justifyContent = "center";
-  core.style.color = "white";
-  core.style.fontSize = "14px";
-  core.style.fontWeight = "900";
-  core.style.transform = "scale(1.08)";
-  core.textContent = isFacility ? "設" : "餐";
-
-  wrapper.append(pulse, core);
-  return wrapper;
+  if (point.pointType === "restaurant" || text.includes("餐") || text.includes("食")) return "restaurant";
+  if (text.includes("廁") || text.includes("洗手間")) return "restroom";
+  if (text.includes("醫") || text.includes("急救")) return "firstAid";
+  if (text.includes("摩天輪")) return "ferrisWheel";
+  if (text.includes("飛車") || text.includes("小飛龍") || text.includes("雲霄")) return "coaster";
+  if (text.includes("旋轉木馬") || text.includes("海洋總動員")) return "carousel";
+  if (text.includes("商店") || text.includes("超商") || text.includes("拍貼") || text.includes("化石")) return "shop";
+  if (text.includes("服務") || text.includes("資訊") || text.includes("普通設施")) return "info";
+  return point.pointType === "facility" ? "store" : "restaurant";
 }
 
-function clearMarker(marker: GoogleMapsMarker) {
-  if ("setMap" in marker) {
-    marker.setMap(null);
-    return;
+function getMarkerIconPath(kind: MarkerKind) {
+  switch (kind) {
+    case "firstAid":
+      return '<path d="M25 25h22a4 4 0 0 1 4 4v21a4 4 0 0 1-4 4H25a4 4 0 0 1-4-4V29a4 4 0 0 1 4-4Z"/><path d="M30 25v-5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v5"/><path d="M36 32v15M28.5 39.5h15"/>';
+    case "restaurant":
+      return '<path d="M28 16v38M22 16v14a6 6 0 0 0 12 0V16M44 16v38M44 16c6 3 8 9 6 17-1 4-3 7-6 8"/>';
+    case "store":
+      return '<path d="M21 30h30l-3-10H24l-3 10Z"/><path d="M24 30v22h24V30"/><path d="M21 30c1 5 6 5 8 0 2 5 7 5 9 0 2 5 7 5 9 0 2 5 7 5 8 0"/><path d="M34 52V41h8v11"/>';
+    case "info":
+      return '<circle cx="36" cy="36" r="19"/><path d="M36 33v15"/><path d="M36 25h.01"/>';
+    case "carousel":
+      return '<path d="M24 24h24"/><path d="M36 16v38"/><path d="M27 32c4-5 13-5 18 1l-3 10H30l-3-11Z"/><path d="M30 43l-4 7M42 43l4 7"/><path d="M43 31l5 3"/>';
+    case "shop":
+      return '<path d="M25 29h22l3 24H22l3-24Z"/><path d="M30 29v-5a6 6 0 0 1 12 0v5"/>';
+    case "restroom":
+      return '<circle cx="27" cy="21" r="4"/><circle cx="45" cy="21" r="4"/><path d="M27 29v23M21 36h12M45 29l8 23H37l8-23Z"/><path d="M36 18v38"/>';
+    case "ferrisWheel":
+      return '<circle cx="36" cy="31" r="15"/><circle cx="36" cy="31" r="3"/><path d="M36 31 25 53M36 31l11 22M26 53h20M36 16v30M21 31h30M25 20l22 22M47 20 25 42"/><rect x="33" y="12" width="6" height="5" rx="1"/><rect x="49" y="28" width="6" height="5" rx="1"/><rect x="33" y="45" width="6" height="5" rx="1"/><rect x="17" y="28" width="6" height="5" rx="1"/>';
+    case "coaster":
+      return '<path d="M18 51c10-24 22-24 36-3"/><path d="M18 51h36M22 51V37M34 51V30M46 51V39"/><path d="M23 29c8 5 16 5 26 0"/><circle cx="27" cy="25" r="2"/><circle cx="35" cy="24" r="2"/><circle cx="43" cy="25" r="2"/>';
   }
+}
 
-  marker.map = null;
+function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: GoogleMapsNamespace) {
+  const fill = selected ? "#F36F7F" : "#FFFFFF";
+  const stroke = selected ? "#FFFFFF" : "#9AAEC8";
+  const size = selected ? 70 : 58;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + 10}" viewBox="0 0 72 84">
+      <defs>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+          <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#0B0D0E" flood-opacity="0.18"/>
+        </filter>
+      </defs>
+      <path filter="url(#shadow)" d="M18 5h36c8 0 13 5 13 13v35c0 8-5 13-13 13H43L36 78l-7-12H18C10 66 5 61 5 53V18C5 10 10 5 18 5Z" fill="${fill}"/>
+      <g fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        ${getMarkerIconPath(getMarkerKind(point))}
+      </g>
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new maps.Size(size, size + 10),
+    anchor: new maps.Point(size / 2, size + 6),
+  };
 }
 
 export function TownPassMap() {
@@ -163,6 +188,32 @@ export function TownPassMap() {
   const [selectedPoint, setSelectedPoint] = useState<TownPassPoint | null>(null);
   const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
+  const [placeDetails, setPlaceDetails] = useState<PlaceDetail[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlaceDetails = async () => {
+      try {
+        const response = await fetch(PLACE_DETAILS_URL, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Failed to load ${PLACE_DETAILS_URL}`);
+        }
+        const data = (await response.json()) as PlaceDetailsResponse;
+        if (!cancelled) {
+          setPlaceDetails(data.places ?? []);
+        }
+      } catch (error) {
+        console.error("Failed to load place details", error);
+      }
+    };
+
+    loadPlaceDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -268,6 +319,16 @@ export function TownPassMap() {
 
   const selectedPointId = selectedPoint?.id ?? null;
 
+  const placeDetailsByName = useMemo(() => {
+    const detailMap = new Map<string, PlaceDetail>();
+    placeDetails.forEach((detail) => {
+      [detail.name, ...(detail.aliases ?? [])].forEach((name) => {
+        detailMap.set(normalizePlaceName(name), detail);
+      });
+    });
+    return detailMap;
+  }, [placeDetails]);
+
   const focusPoint = (point: TownPassPoint) => {
     const marker = markersRef.current.find((entry) => entry.pointId === point.id)?.marker;
     if (!mapRef.current || !marker) {
@@ -289,35 +350,17 @@ export function TownPassMap() {
 
     markersRef.current.forEach((entry) => clearMarker(entry.marker));
     markersRef.current = [];
-    const AdvancedMarkerElement = maps.marker?.AdvancedMarkerElement;
-    const canUseAdvancedMarker = Boolean(googleMapsMapId && AdvancedMarkerElement);
-
     const bounds = new maps.LatLngBounds();
 
     visiblePoints.forEach((point) => {
       const isSelected = selectedPointId === point.id;
-      const marker =
-        canUseAdvancedMarker && AdvancedMarkerElement
-          ? new AdvancedMarkerElement({
-            position: { lat: point.lat, lng: point.lng },
-            map: mapRef.current,
-            title: point.name,
-            content: isSelected ? createSelectedMarkerContent(point) : createMarkerContent(point),
-          })
-          : new maps.Marker({
-            position: { lat: point.lat, lng: point.lng },
-            map: mapRef.current,
-            title: point.name,
-            icon: {
-              url:
-                isSelected
-                  ? "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
-                  : point.pointType === "facility"
-                  ? "https://maps.google.com/mapfiles/ms/icons/blue-dot.png"
-                  : "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
-              scaledSize: new maps.Size(isSelected ? 46 : 34, isSelected ? 46 : 34),
-            },
-          });
+      const marker = new maps.Marker({
+        position: { lat: point.lat, lng: point.lng },
+        map: mapRef.current,
+        title: point.name,
+        icon: createMapMarkerIcon(point, isSelected, maps),
+        zIndex: isSelected ? 1000 : 1,
+      });
 
       marker.addListener("click", () => {
         setSelectedPoint(point);
@@ -346,20 +389,26 @@ export function TownPassMap() {
     }
   }, [selectedPointId, visiblePoints]);
 
-  const summaryText = useMemo(() => {
-    const facilityCount = visiblePoints.filter((point) => point.pointType === "facility").length;
-    const restaurantCount = visiblePoints.filter(
-      (point) => point.pointType === "restaurant",
-    ).length;
-    return `設施 ${facilityCount} 筆、餐飲 ${restaurantCount} 筆`;
-  }, [visiblePoints]);
-
   const hasActiveFilters =
     query.trim().length > 0 ||
     !layers.facilities ||
     !layers.restaurants ||
     selectedCategory !== null ||
     selectedFloor !== null;
+
+  const selectedPlaceDetail = selectedPoint
+    ? placeDetailsByName.get(normalizePlaceName(selectedPoint.name)) ?? null
+    : null;
+
+  const selectedFilterTags = selectedPlaceDetail
+    ? [
+        selectedPlaceDetail.filters?.height,
+        selectedPlaceDetail.filters?.thrill,
+        ...(selectedPlaceDetail.filters?.environment ?? []),
+        selectedPlaceDetail.filters?.price,
+        ...(selectedPlaceDetail.filters?.special ?? []),
+      ].filter((tag): tag is string => Boolean(tag))
+    : [];
 
   const resetFilters = () => {
     setQuery("");
@@ -478,8 +527,7 @@ export function TownPassMap() {
               </label>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-grayscale-500">{summaryText}</span>
+            <div className="flex justify-end">
               <button
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}
@@ -531,7 +579,7 @@ export function TownPassMap() {
                       {getPointLabel(selectedPoint.pointType)}
                     </span>
                     <span className="text-[10px] font-bold text-grayscale-500">
-                      {selectedPoint.category}
+                      {selectedPlaceDetail?.category ?? selectedPoint.category}
                     </span>
                   </div>
                   <h2 className="mt-1 truncate font-display text-lg font-semibold text-grayscale-900">
@@ -560,7 +608,7 @@ export function TownPassMap() {
                       </div>
                       <p className="text-[10px] font-bold text-grayscale-500">分類</p>
                       <p className="mt-1 text-sm font-semibold text-grayscale-900">
-                        {selectedPoint.category}
+                        {selectedPlaceDetail?.category ?? selectedPoint.category}
                       </p>
                     </div>
                     <div className="rounded-xl bg-grayscale-50 p-3">
@@ -577,19 +625,31 @@ export function TownPassMap() {
                   <div className="rounded-xl bg-primary-50 p-4">
                     <div className="flex items-center gap-2 text-primary">
                       <Clock className="h-4 w-4" />
-                      <p className="text-sm font-semibold">即時資訊</p>
+                      <p className="text-sm font-semibold">
+                        {selectedPlaceDetail ? "設施介紹" : "即時資訊"}
+                      </p>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-grayscale-700">
-                      目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。
+                      {selectedPlaceDetail?.description ??
+                        "目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。"}
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border-grayscale-100 p-4">
-                    <p className="text-[10px] font-bold text-grayscale-500">座標</p>
-                    <p className="mt-1 font-mono text-xs text-grayscale-700">
-                      {selectedPoint.lat.toFixed(6)}, {selectedPoint.lng.toFixed(6)}
-                    </p>
-                  </div>
+                  {selectedFilterTags.length > 0 && (
+                    <div className="rounded-xl border border-grayscale-100 p-4">
+                      <p className="text-[10px] font-bold text-grayscale-500">篩選標籤</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedFilterTags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-full bg-grayscale-100 px-3 py-1 text-xs font-semibold text-grayscale-700"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
