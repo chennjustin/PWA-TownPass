@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   title: '台北迪士尼',
   description: '台北迪士尼 PWA',
   manifest: '/manifest.webmanifest',
+  icons: {
+    icon: '/brand-logo.svg',
+    apple: '/brand-logo.svg',
+    shortcut: '/brand-logo.svg',
+  },
 };
 
 export const viewport: Viewport = {

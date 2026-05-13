@@ -10,9 +10,9 @@
   "lang": "zh-TW",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "48x48",
-      "type": "image/x-icon"
+      "src": "/brand-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }
