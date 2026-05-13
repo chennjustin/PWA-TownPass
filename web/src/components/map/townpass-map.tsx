@@ -58,6 +58,10 @@ type GoogleMapsLatLngBounds = {
   extend: (position: { lat: number; lng: number }) => void;
 };
 
+type GoogleMapsGroundOverlay = {
+  setMap: (map: GoogleMapsMap | null) => void;
+};
+
 type GoogleMapsNamespace = {
   Map: new (
     element: HTMLElement,
@@ -66,6 +70,7 @@ type GoogleMapsNamespace = {
   Marker: new (options: Record<string, unknown>) => GoogleMapsLegacyMarker;
   InfoWindow: new () => GoogleMapsInfoWindow;
   LatLngBounds: new () => GoogleMapsLatLngBounds;
+  GroundOverlay: new (url: string, bounds: Record<string, number>, options?: Record<string, unknown>) => GoogleMapsGroundOverlay;
   Point: new (x: number, y: number) => unknown;
   Size: new (width: number, height: number) => unknown;
 };
@@ -349,6 +354,18 @@ export function TownPassMap() {
         const map = new maps.Map(mapContainerRef.current, mapOptions);
         mapRef.current = map;
         infoWindowRef.current = new maps.InfoWindow();
+
+        // 疊加自訂的園區地圖圖片
+        const imageBounds = {
+          north: 25.0983576,
+          south: 25.0962398,
+          east: 121.5166168,
+          west: 121.5135708,
+        };
+        const overlay = new maps.GroundOverlay("/map-overlay.png", imageBounds, {
+          opacity: 1, // 您可以自行調整透明度，例如 0.8
+        });
+        overlay.setMap(map);
 
         let loadedPoints: TownPassPoint[] = [];
         try {
