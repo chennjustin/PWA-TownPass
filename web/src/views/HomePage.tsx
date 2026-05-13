@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { HelpCircle, Bus, Info, Calendar, Users, ChevronDown, ArrowRight } from 'lucide-react';
+import { HelpCircle, Info, Calendar, Users, ChevronDown, ArrowRight } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
 import { townPassFaqData } from '@/src/lib/townpass-faq-data';
 
@@ -25,32 +25,14 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Service Grid */}
-      <section className="grid grid-cols-4 gap-2">
-        {[
-          { icon: HelpCircle, label: '常見問題', href: '/faq' },
-          { icon: Bus, label: '交通方式', href: '/faq' },
-          { icon: Info, label: '遊園資訊', href: '/faq' },
-          { icon: Calendar, label: '設施預約', href: '/events' },
-        ].map((item, idx) => (
-          <Link
-            key={idx}
-            href={item.href}
-            className="flex flex-col items-center gap-1 transition active:scale-95"
-          >
-            <div className="w-14 h-14 bg-white border border-grayscale-100 rounded-full flex items-center justify-center shadow-sm">
-              <item.icon className="w-6 h-6 text-primary" />
-            </div>
-            <span className="text-[10px] text-grayscale-700 font-medium">{item.label}</span>
-          </Link>
-        ))}
-      </section>
-
       {/* Real-time Info */}
       <section className="space-y-3">
-        <div className="flex justify-between items-end">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
-          <span className="text-primary font-semibold text-sm">查看更多</span>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
+            <Info className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-semibold text-sm text-primary">查看更多</span>
         </div>
         <div className="flex flex-col gap-4">
           <div className="bg-white border border-grayscale-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
@@ -90,8 +72,11 @@ export function HomePage() {
 
       {/* FAQ Preview */}
       <section className="space-y-3">
-        <div className="flex justify-between items-end">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+            <HelpCircle className="h-4 w-4 text-primary" />
+          </div>
           <Link href="/faq" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
             查看完整 FAQ <ArrowRight className="w-4 h-4" />
           </Link>
@@ -127,7 +112,10 @@ export function HomePage() {
 
       {/* Activities */}
       <section className="space-y-3 pb-8">
-        <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
+        <div className="flex items-center">
+          <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
+          <Calendar className="ml-1 h-4 w-4 text-primary" />
+        </div>
         <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 no-scrollbar snap-x">
           <div className="flex-shrink-0 w-72 bg-white border border-grayscale-100 rounded-xl overflow-hidden snap-start shadow-sm">
             <div className="relative h-40">
