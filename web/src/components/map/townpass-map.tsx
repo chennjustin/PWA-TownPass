@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
   Clock,
   FerrisWheel,
   MapPin,
@@ -185,8 +184,8 @@ function getRecommendedHeightFilters(childHeight: string) {
   return ["幼童友善", "小學門檻", "刺激挑戰"];
 }
 
-function matchesTextFilter(value: string | null | undefined, filter: string | null) {
-  if (!filter) {
+function matchesTextFilter(value: string | null | undefined, filters: string[]) {
+  if (filters.length === 0) {
     return true;
   }
 
@@ -194,20 +193,21 @@ function matchesTextFilter(value: string | null | undefined, filter: string | nu
     return false;
   }
 
-  return (
-    value.includes(filter) ||
-    (filter.includes("幼童友善") && value.includes("幼童友善")) ||
-    (filter.includes("小學門檻") && value.includes("小學門檻")) ||
-    (filter.includes("刺激挑戰") && value.includes("刺激挑戰"))
+  return filters.some(
+    (filter) =>
+      value.includes(filter) ||
+      (filter.includes("幼童友善") && value.includes("幼童友善")) ||
+      (filter.includes("小學門檻") && value.includes("小學門檻")) ||
+      (filter.includes("刺激挑戰") && value.includes("刺激挑戰")),
   );
 }
 
-function matchesListFilter(values: string[] | undefined, filter: string | null) {
-  if (!filter) {
+function matchesListFilter(values: string[] | undefined, filters: string[]) {
+  if (filters.length === 0) {
     return true;
   }
 
-  return Boolean(values?.some((value) => value.includes(filter)));
+  return Boolean(values?.some((value) => filters.some((filter) => value.includes(filter))));
 }
 
 function getMarkerIconPath(kind: MarkerKind) {
@@ -289,7 +289,7 @@ export function TownPassMap() {
       : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
   );
   const [query, setQuery] = useState("");
-  const [filterPanelOpen, setFilterPanelOpen] = useState(true);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [selectedContentType, setSelectedContentType] = useState<MapContentType>("facility");
   const [childHeight, setChildHeight] = useState("");
   const [rideFilters, setRideFilters] = useState<RideFilterState>(defaultRideFilters);
@@ -623,7 +623,10 @@ export function TownPassMap() {
 
   const hasActiveRideFilters =
     childHeight.trim().length > 0 ||
-    Object.values(rideFilters).some((value) => value !== null);
+    Object.values(rideFilters).some((values) => values.length > 0);
+  const activeRideFilterCount =
+    (childHeight.trim().length > 0 ? 1 : 0) +
+    Object.values(rideFilters).reduce((total, values) => total + values.length, 0);
 
   const hasActiveFilters =
     query.trim().length > 0 ||
@@ -662,6 +665,7 @@ export function TownPassMap() {
     setSelectedCategory(null);
     setSelectedFloor(null);
     setSelectedPoint(null);
+    setFilterPanelOpen(false);
 
     if (contentType !== "facility") {
       setChildHeight("");
@@ -669,9 +673,46 @@ export function TownPassMap() {
     }
   };
 
-  const setRideFilter = (key: keyof RideFilterState, value: string) => {
-    setRideFilters((prev) => ({ ...prev, [key]: value || null }));
+  const toggleRideFilter = (key: keyof RideFilterState, value: string) => {
+    setRideFilters((prev) => {
+      const selectedValues = prev[key];
+      const nextValues = selectedValues.includes(value)
+        ? selectedValues.filter((selectedValue) => selectedValue !== value)
+        : [...selectedValues, value];
+
+      return { ...prev, [key]: nextValues };
+    });
   };
+
+  const renderFilterGroup = (
+    key: keyof RideFilterState,
+    label: string,
+    options: string[],
+    className = "",
+  ) => (
+    <div className={`space-y-2 ${className}`}>
+      <p className="text-xs font-bold text-grayscale-500">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const selected = rideFilters[key].includes(option);
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => toggleRideFilter(key, option)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${selected
+                  ? "border-primary bg-primary text-white"
+                  : "border-grayscale-100 bg-white text-grayscale-700"
+                }`}
+              aria-pressed={selected}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const resetFilters = () => {
     setQuery("");
@@ -717,8 +758,8 @@ export function TownPassMap() {
           })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
+        <div className="relative">
+          <div className={`relative ${selectedContentType === "facility" ? "pr-[4.25rem]" : ""}`}>
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grayscale-500" />
             <input
               value={query}
@@ -730,7 +771,7 @@ export function TownPassMap() {
           {selectedContentType === "facility" && (
             <button
               onClick={() => setFilterPanelOpen((open) => !open)}
-              className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveFilters
+              className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveRideFilters
                   ? "border-primary bg-primary text-white"
                   : "border-grayscale-100 bg-white text-primary"
                 }`}
@@ -738,112 +779,29 @@ export function TownPassMap() {
               aria-label="開啟地圖篩選器"
             >
               <SlidersHorizontal className="h-5 w-5" />
+              {activeRideFilterCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
+                  {activeRideFilterCount}
+                </span>
+              )}
             </button>
           )}
         </div>
 
         {filterPanelOpen && selectedContentType === "facility" && (
-          <div className="space-y-2 rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
-            <div className="space-y-3">
-                <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                  <label className="relative shrink-0">
-                    <select
-                      value={rideFilters.height ?? ""}
-                      onChange={(event) => setRideFilter("height", event.target.value)}
-                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.height
-                          ? "border-primary bg-primary text-white"
-                          : "border-grayscale-100 bg-white text-grayscale-700"
-                        }`}
-                    >
-                      <option value="">身高限制</option>
-                      {heightFilterOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  </label>
+          <div className="space-y-3 rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur">
+            <div className="grid gap-3">
+              {renderFilterGroup("height", "身高限制", heightFilterOptions)}
+              {renderFilterGroup("thrill", "尖叫指數", thrillFilterOptions)}
+              {renderFilterGroup("environment", "室內外", environmentFilterOptions)}
+              {renderFilterGroup("price", "票價 / 類型", priceFilterOptions)}
+              {renderFilterGroup("special", "特殊族群", specialFilterOptions)}
+            </div>
 
-                  <label className="relative shrink-0">
-                    <select
-                      value={rideFilters.thrill ?? ""}
-                      onChange={(event) => setRideFilter("thrill", event.target.value)}
-                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.thrill
-                          ? "border-primary bg-primary text-white"
-                          : "border-grayscale-100 bg-white text-grayscale-700"
-                        }`}
-                    >
-                      <option value="">尖叫指數</option>
-                      {thrillFilterOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  </label>
-
-                  <label className="relative shrink-0">
-                    <select
-                      value={rideFilters.environment ?? ""}
-                      onChange={(event) => setRideFilter("environment", event.target.value)}
-                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.environment
-                          ? "border-primary bg-primary text-white"
-                          : "border-grayscale-100 bg-white text-grayscale-700"
-                        }`}
-                    >
-                      <option value="">室內外</option>
-                      {environmentFilterOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  </label>
-
-                  <label className="relative shrink-0">
-                    <select
-                      value={rideFilters.price ?? ""}
-                      onChange={(event) => setRideFilter("price", event.target.value)}
-                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.price
-                          ? "border-primary bg-primary text-white"
-                          : "border-grayscale-100 bg-white text-grayscale-700"
-                        }`}
-                    >
-                      <option value="">票價／類型</option>
-                      {priceFilterOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  </label>
-
-                  <label className="relative shrink-0">
-                    <select
-                      value={rideFilters.special ?? ""}
-                      onChange={(event) => setRideFilter("special", event.target.value)}
-                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.special
-                          ? "border-primary bg-primary text-white"
-                          : "border-grayscale-100 bg-white text-grayscale-700"
-                        }`}
-                    >
-                      <option value="">特殊族群</option>
-                      {specialFilterOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-                  </label>
-                </div>
-              </div>
-
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-grayscale-500">
+                {activeRideFilterCount > 0 ? `已套用 ${activeRideFilterCount} 個篩選` : "尚未套用篩選"}
+              </span>
               <button
                 onClick={resetFilters}
                 disabled={!hasActiveFilters}

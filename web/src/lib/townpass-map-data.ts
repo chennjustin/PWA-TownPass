@@ -99,11 +99,11 @@ async function fetchPointsFromGeoJson(
 }
 
 export type RideFilterState = {
-  height: string | null;
-  thrill: string | null;
-  environment: string | null;
-  price: string | null;
-  special: string | null;
+  height: string[];
+  thrill: string[];
+  environment: string[];
+  price: string[];
+  special: string[];
 };
 
 export type PlaceDetail = {
@@ -138,11 +138,11 @@ export const priceFilterOptions = ["🎠 基礎遊具（20～30 元）", "⭐ �
 export const specialFilterOptions = ["🤰 孕婦可搭乘", "♿ 無障礙標示", "❄️ 冷氣開放"];
 
 export const defaultRideFilters: RideFilterState = {
-  height: null,
-  thrill: null,
-  environment: null,
-  price: null,
-  special: null,
+  height: [],
+  thrill: [],
+  environment: [],
+  price: [],
+  special: [],
 };
 
 const facilityWaitSamples = [15, 25, 35, 45, 5];
@@ -154,4 +154,3 @@ export function getFacilityWaitMinutes(point: TownPassPoint | { id: string }) {
   );
   return facilityWaitSamples[hash % facilityWaitSamples.length];
 }
-
