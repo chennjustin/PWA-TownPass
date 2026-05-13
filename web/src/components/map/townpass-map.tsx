@@ -151,11 +151,17 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
+  const userMarkerRef = useRef<GoogleMapsMarker | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
     restaurants: true,
   });
+  const [statusText, setStatusText] = useState(
+    googleMapsApiKey
+      ? "地圖初始化中..."
+      : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
+  );
   const [query, setQuery] = useState("");
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -163,6 +169,7 @@ export function TownPassMap() {
   const [selectedPoint, setSelectedPoint] = useState<TownPassPoint | null>(null);
   const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
+  const [userPosition] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -216,8 +223,13 @@ export function TownPassMap() {
         }
 
         setAllPoints(loadedPoints);
-      } catch (error) {
-        console.error("Failed to initialize Google Maps", error);
+        setStatusText(
+          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
+        );
+      } catch {
+        if (!cancelled) {
+          setStatusText("Google Maps 載入失敗，請檢查 API Key 或網路。");
+        }
       }
     };
 
@@ -227,6 +239,10 @@ export function TownPassMap() {
       cancelled = true;
       markersRef.current.forEach((entry) => clearMarker(entry.marker));
       markersRef.current = [];
+      if (userMarkerRef.current) {
+        clearMarker(userMarkerRef.current);
+      }
+      userMarkerRef.current = null;
       infoWindowRef.current = null;
       mapRef.current = null;
     };
@@ -331,20 +347,13 @@ export function TownPassMap() {
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
 
-    const focusedPoint = selectedPointId
-      ? visiblePoints.find((point) => point.id === selectedPointId)
-      : null;
-
-    if (focusedPoint) {
-      mapRef.current.panTo({ lat: focusedPoint.lat, lng: focusedPoint.lng });
-      mapRef.current.setZoom(18);
-    } else if (visiblePoints.length > 1) {
+    if (visiblePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 48);
-    } else if (visiblePoints.length === 1) {
+    } else if (!userPosition && visiblePoints.length === 1) {
       mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
       mapRef.current.setZoom(18);
     }
-  }, [selectedPointId, visiblePoints]);
+  }, [selectedPointId, userPosition, visiblePoints]);
 
   const summaryText = useMemo(() => {
     const facilityCount = visiblePoints.filter((point) => point.pointType === "facility").length;
@@ -623,6 +632,8 @@ export function TownPassMap() {
           )}
         </div>
       </div>
+
+      <p className="text-xs text-grayscale-600">{statusText}</p>
     </section>
   );
 }

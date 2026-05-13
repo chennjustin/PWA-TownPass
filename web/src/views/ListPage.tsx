@@ -201,9 +201,9 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
     }`;
 
   return (
-    <div className="pt-16 h-full flex flex-col">
+    <div className="relative h-full flex flex-col">
       {/* Header Controls */}
-      <div className="fixed left-0 right-0 top-16 z-40 px-4 py-3 space-y-3 bg-surface shadow-sm border-b border-grayscale-100">
+      <div className="absolute left-0 right-0 top-0 z-20 px-4 py-3 space-y-3 border-b border-grayscale-100 bg-surface shadow-sm">
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grayscale-500" />
