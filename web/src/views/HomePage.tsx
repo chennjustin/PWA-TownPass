@@ -97,15 +97,15 @@ export function HomePage() {
           </Link>
         </div>
 
-        <div className="space-y-2">
+        <div className="divide-y divide-grayscale-200 border-y border-grayscale-100">
           {homeQuickFaqs.map((faq) => (
             <details
               key={faq.id}
-              className="group rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm open:border-primary/30"
+              className="group bg-transparent py-3"
             >
               <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                 <div>
-                  <span className="inline-block rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary-700">
+                  <span className="inline-block border-l-2 border-primary pl-2 text-[10px] font-bold text-primary-700">
                     {faq.category}
                   </span>
                   <h4 className="mt-1 text-sm font-semibold text-grayscale-900">{faq.question}</h4>
