@@ -1,30 +1,18 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
+import { TopAppBar } from '@/src/components/TopAppBar';
+import { BottomNavBar } from '@/src/components/BottomNavBar';
 
 export const metadata: Metadata = {
-  title: "TownPass | 兒童新樂園服務",
-  description: "兒童新樂園 PWA 服務平台",
-  manifest: "/manifest.webmanifest",
-  applicationName: "TownPass",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "TownPass",
-  },
-  formatDetection: {
-    telephone: false,
-  },
+  title: '台北樂園通',
+  description: '台北樂園通 PWA',
+  manifest: '/manifest.webmanifest',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#006876',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -33,12 +21,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        {children}
+    <html lang="zh-Hant">
+      <body>
+        <div className="min-h-screen bg-surface flex flex-col">
+          <TopAppBar />
+          <main className="flex-1 overflow-hidden">{children}</main>
+          <BottomNavBar />
+        </div>
       </body>
     </html>
   );

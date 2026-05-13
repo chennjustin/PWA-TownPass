@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=Source+Sans+3:wght@400;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Public Sans", sans-serif;
+
+  --color-surface: #f7fafb;
+  --color-surface-dim: #d7dbdc;
+  --color-surface-bright: #f7fafb;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f1f4f5;
+  --color-surface-container: #ebeeef;
+  --color-surface-container-high: #e5e9ea;
+  --color-surface-container-highest: #dfe3e4;
+  --color-on-surface: #181c1d;
+  --color-on-surface-variant: #3e494b;
+  --color-inverse-surface: #2d3132;
+  --color-inverse-on-surface: #eef1f2;
+  
+  --color-primary: #006876;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #5ab4c5;
+  --color-on-primary-container: #00434d;
+  
+  --color-secondary: #7d5700;
+  --color-secondary-container: #fec252;
+  --color-on-secondary-container: #725000;
+
+  --color-primary-50: #EDF8FA;
+  --color-primary-100: #DBF1F5;
+  --color-primary-200: #B4E2EA;
+  --color-primary-300: #93D4DF;
+  --color-primary-400: #71C5D5;
+  --color-primary-500: #5AB4C5;
+  --color-primary-600: #468D9B;
+  --color-primary-700: #356C77;
+  --color-primary-800: #22474E;
+  --color-primary-900: #112629;
+
+  --color-grayscale-50: #F1F3F4;
+  --color-grayscale-100: #E3E7E9;
+  --color-grayscale-200: #CAD1D5;
+  --color-grayscale-300: #ADB8BE;
+  --color-grayscale-500: #738995;
+  --color-grayscale-700: #475259;
+  --color-grayscale-800: #30383D;
+  --color-grayscale-900: #171B1D;
+
+  --color-orange-500: #FD853A;
+  --color-red-500: #D45251;
+
+  --radius-xs: 0.25rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-surface text-on-surface font-sans;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
