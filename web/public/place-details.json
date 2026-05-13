@@ -7,9 +7,14 @@
       "filters": {
         "height": "幼童友善（未滿 90cm）",
         "thrill": "溫和型",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
-        "special": ["孕婦可搭乘（限平面座椅）", "無障礙標示"]
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
+        "special": [
+          "🤰 孕婦可搭乘",
+          "♿ 無障礙標示"
+        ]
       }
     },
     {
@@ -19,9 +24,15 @@
       "filters": {
         "height": "幼童友善（未滿 90cm）",
         "thrill": "溫和型",
-        "environment": ["露天", "冷氣開放"],
-        "price": "基礎遊具（20-30元）",
-        "special": ["無障礙標示"]
+        "environment": [
+          "冷氣開放",
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
+        "special": [
+          "♿ 無障礙標示",
+          "❄️ 冷氣開放"
+        ]
       }
     },
     {
@@ -31,9 +42,15 @@
       "filters": {
         "height": "幼童友善（未滿 90cm）",
         "thrill": "溫和型",
-        "environment": ["露天", "冷氣開放"],
-        "price": "基礎遊具（20-30元）",
-        "special": ["無障礙標示"]
+        "environment": [
+          "冷氣開放",
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
+        "special": [
+          "♿ 無障礙標示",
+          "❄️ 冷氣開放"
+        ]
       }
     },
     {
@@ -43,8 +60,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "溫和型",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -55,8 +74,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "中度刺激",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -67,8 +88,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "溫和型",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -79,8 +102,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "中度刺激",
-        "environment": ["頂棚區"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "頂棚區"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -91,8 +116,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "中度刺激",
-        "environment": ["頂棚區"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "頂棚區"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -103,8 +130,10 @@
       "filters": {
         "height": "刺激挑戰（110cm 以上）",
         "thrill": "高刺激",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -115,8 +144,10 @@
       "filters": {
         "height": "刺激挑戰（110cm 以上）",
         "thrill": "高刺激",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -127,8 +158,10 @@
       "filters": {
         "height": "刺激挑戰（110cm 以上）",
         "thrill": "中度刺激",
-        "environment": ["頂棚區"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "頂棚區"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -139,8 +172,10 @@
       "filters": {
         "height": "刺激挑戰（110cm 以上）",
         "thrill": "中度刺激",
-        "environment": ["頂棚區"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "頂棚區"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -151,8 +186,10 @@
       "filters": {
         "height": "刺激挑戰（110cm 以上）",
         "thrill": "高刺激",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -163,8 +200,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "中度刺激",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -175,8 +214,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": "溫和型",
-        "environment": ["露天"],
-        "price": "基礎遊具（20-30元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "🎠 基礎遊具（20～30 元）",
         "special": []
       }
     },
@@ -187,8 +228,10 @@
       "filters": {
         "height": "幼童友善（80cm 以上）",
         "thrill": null,
-        "environment": ["露天"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
@@ -199,8 +242,10 @@
       "filters": {
         "height": "小學門檻（90cm-110cm）",
         "thrill": null,
-        "environment": ["露天"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
@@ -211,8 +256,10 @@
       "filters": {
         "height": "幼童友善（80cm 以上）",
         "thrill": null,
-        "environment": ["露天"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
@@ -223,8 +270,10 @@
       "filters": {
         "height": "幼童友善（80cm 以上）",
         "thrill": null,
-        "environment": ["露天"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
@@ -235,183 +284,259 @@
       "filters": {
         "height": "幼童友善（80cm 以上）",
         "thrill": null,
-        "environment": ["露天"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "露天"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
     {
       "name": "A10迷你卡丁車",
-      "aliases": ["A10迷你卡丁"],
+      "aliases": [
+        "A10迷你卡丁"
+      ],
       "category": "大型精選設施",
       "description": "純電能迷你賽車結合80米專業賽道，小朋友可體驗加速過彎與競速奔馳的駕駛快感。",
       "filters": {
         "height": "小學門檻（110cm 以上）",
         "thrill": null,
-        "environment": ["頂棚區"],
-        "price": "委外精選設施（50-80元）",
+        "environment": [
+          "頂棚區"
+        ],
+        "price": "⭐ 委外精選設施（50～80 元）",
         "special": []
       }
     },
     {
       "name": "逃生門密室逃脫",
-      "aliases": ["密室逃脫"],
+      "aliases": [
+        "密室逃脫"
+      ],
       "category": "1樓休閒娛樂與創意商店",
       "description": "提供沉浸式的解謎體驗，玩家需在限時內尋找線索、破解機關，考驗團隊默契與觀察力，是親朋好友聚會挑戰智力的首選。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "智慧無人超商",
       "category": "1樓休閒娛樂與創意商店",
       "description": "結合最新 AI 與感應技術，提供無須排隊結帳的便利購物環境，刷臉或感應即可進門，享受未來感的科技零售體驗。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "化石先生",
       "category": "1樓休閒娛樂與創意商店",
       "description": "專營古生物化石、礦石與科普精品，將大自然的歷史縮小成精美的藝術品，是科學愛好者與收藏家探索地球奧祕的寶庫。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "韓風四格拍貼機",
-      "aliases": ["Kr4 Cut 韓風四格拍貼機"],
+      "aliases": [
+        "Kr4 Cut 韓風四格拍貼機"
+      ],
       "category": "1樓休閒娛樂與創意商店",
       "description": "同步韓國最流行的高質感拍貼機，提供多款可愛道具與濾鏡，讓您與好友留下具設計感的精美四格相片作為紀念。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "雲朵列車",
       "category": "1樓休閒娛樂與創意商店",
       "description": "充滿童趣的室內小型軌道設施，色彩繽紛且造型可愛，非常適合家長帶著孩子搭乘，在輕快的節奏中享受歡樂的親子時光。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "小時光",
-      "aliases": ["小食光"],
+      "aliases": [
+        "小食光"
+      ],
       "category": "1樓休閒娛樂與創意商店",
       "description": "溫馨的輕食點心空間，提供精緻的午茶選擇，是逛累了之後休息片刻、補充體力並享受悠閒氛圍的絕佳角落。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "統一多拿滋",
       "category": "2樓美食街與生活商店",
       "description": "來自日本的人氣甜甜圈品牌，主打口感 Q 彈的波堤系列與多樣化沾醬，是下午茶時段最受歡迎的甜點選擇。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "菓舖",
-      "aliases": ["菓鋪"],
+      "aliases": [
+        "菓鋪"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "專注於各式精緻糖果與甜點，繽紛的陳列讓人心情大好，不管是滿足嗜甜的味蕾還是挑選小禮物都非常合適。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "翠茶風",
-      "aliases": ["萃茶風"],
+      "aliases": [
+        "萃茶風"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "在地手搖飲品牌，嚴選優質茶葉現點現萃，風味清爽回甘，提供忙碌購物行程中一道清新解渴的味覺救贖。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "義品院",
-      "aliases": ["義品院義大利麵"],
+      "aliases": [
+        "義品院義大利麵"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "主打平價實惠的義式料理，濃郁的醬汁搭配口感適中的麵條，讓學生與上班族都能輕鬆享受到道地的西式風味。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "四海遊龍",
       "category": "2樓美食街與生活商店",
       "description": "連鎖鍋貼水餃名店，主打外皮金黃酥脆的招牌鍋貼與飽滿內餡，搭配一碗酸辣湯便是最經典的國民美味組合。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "鴻屋蛋包飯",
       "category": "2樓美食街與生活商店",
       "description": "職人特製的半熟滑蛋覆蓋在香噴噴的炒飯上，搭配精心熬煮的咖哩或茄汁，濃郁交織的層次感令人食指大動。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "花蓮扁食",
       "category": "2樓美食街與生活商店",
       "description": "承襲東台灣傳統工法，薄皮包裹鮮美肉餡，配上清甜的湯頭，讓您不出遠門也能品嚐到道地的花蓮家鄉味。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "MR. TANTUNI 突厥",
-      "aliases": ["突厥"],
+      "aliases": [
+        "突厥"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "充滿異國色彩的風味料理，善用香料調味，呈現獨特的西域美食風情，是想要嘗試特別口味饕客的最佳選擇。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "木槿花韓式食堂",
       "category": "2樓美食街與生活商店",
       "description": "提供石鍋拌飯、嫩豆腐鍋等多款經典韓式家常菜，鹹香帶辣的道地調味，滿足您對大口吃肉、大口喝湯的渴望。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "呀咪食堂",
       "category": "2樓美食街與生活商店",
       "description": "主打家庭式家常快餐，餐點選擇豐富且充滿媽媽味，注重營養均衡，讓外食族也能感受到如家一般的溫暖與飽足。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "熊大廚",
       "category": "2樓美食街與生活商店",
       "description": "以創意熱炒與特色簡餐聞名，料理講究火候與香氣，多樣化的菜色滿足全家人挑剔的胃，是美食街中的實力派店家。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "統一超商",
-      "aliases": ["統一超商 (7-11)"],
+      "aliases": [
+        "統一超商 (7-11)"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "全方位的便利好鄰居，提供飲料、零食、鮮食及各項代收代售服務，滿足您在商場內即時的生活所需。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "豆豆先生工作室",
-      "aliases": ["豆豆先生工作坊"],
+      "aliases": [
+        "豆豆先生工作坊"
+      ],
       "category": "2樓美食街與生活商店",
       "description": "專營精品咖啡豆與周邊器具，現場散發濃郁咖啡香氣，提供專業的選豆諮詢，讓您在家也能沖煮出大師級好咖啡。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "漢堡王",
       "category": "3樓異國美食與甜點區",
       "description": "全球知名火烤漢堡品牌，主打火烤牛肉堡的煙燻香氣與厚實肉感，是追求美式快餐飽足感與爽快感的首選。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "土耳其冰淇淋",
       "category": "3樓異國美食與甜點區",
       "description": "不只美味更好玩。老闆逗趣的表演動作是亮點，而冰淇淋本身的黏稠口感與獨特香氣更是不容錯過的經典。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "葡兒飛",
       "category": "3樓異國美食與甜點區",
       "description": "主打葡式蛋塔與歐式烘焙，現烤出爐的塔皮層層酥脆，搭配濃郁蛋奶內餡，是商場內令人難以抗拒的香氣來源。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "大眼蝦",
       "category": "3樓異國美食與甜點區",
       "description": "以蝦餅與海鮮零食聞名，香脆可口且風味多樣，無論是作為逛街時的零嘴還是伴手禮，都深受各年齡層喜愛。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "瓦飛屋",
-      "aliases": ["瓦非屋"],
+      "aliases": [
+        "瓦非屋"
+      ],
       "category": "3樓異國美食與甜點區",
       "description": "專賣現烤格子鬆餅，外酥內軟的餅皮淋上巧克力或蜂蜜，甜而不膩，是下午茶時段女性顧客最喜愛的療癒系點心。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     },
     {
       "name": "貓貓小站",
       "category": "3樓異國美食與甜點區",
       "description": "以貓咪為主題的文創或點心店，店內風格療癒可愛，提供各式萌感十足的商品，是愛貓人士與年輕族群的打卡熱點。",
-      "filters": {}
+      "filters": {
+        "environment": []
+      }
     }
   ]
 }

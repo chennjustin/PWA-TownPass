@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Clock, MapPin, Navigation, Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import {
+  Baby,
+  ChevronDown,
+  Clock,
+  FerrisWheel,
+  MapPin,
+  Navigation,
+  Search,
+  ShoppingBag,
+  SlidersHorizontal,
+  Tag,
+  Utensils,
+  X,
+} from "lucide-react";
 import { loadGoogleMapsScript } from "@/src/lib/google-maps-service";
 import {
   loadTownPassPoints,
@@ -49,21 +62,22 @@ type MapLayerState = {
   restaurants: boolean;
 };
 
+type MapContentType = "facility" | "restaurant" | "shop";
+
+type RideFilterState = {
+  height: string | null;
+  thrill: string | null;
+  environment: string | null;
+  price: string | null;
+  special: string | null;
+};
+
 type MarkerEntry = {
   marker: GoogleMapsLegacyMarker;
   pointId: string;
 };
 
-type MarkerKind =
-  | "firstAid"
-  | "restaurant"
-  | "store"
-  | "info"
-  | "carousel"
-  | "shop"
-  | "restroom"
-  | "ferrisWheel"
-  | "coaster";
+type MarkerKind = "restaurant" | "shop" | "ferrisWheel";
 
 type PlaceDetail = {
   name: string;
@@ -84,6 +98,35 @@ type PlaceDetailsResponse = {
 };
 
 const PLACE_DETAILS_URL = "/place-details.json";
+
+const contentTypeOptions: Array<{
+  value: MapContentType;
+  label: string;
+  Icon: typeof FerrisWheel;
+}> = [
+  { value: "facility", label: "遊樂設施", Icon: FerrisWheel },
+  { value: "restaurant", label: "餐廳", Icon: Utensils },
+  { value: "shop", label: "商店", Icon: ShoppingBag },
+];
+
+const heightFilterOptions = [
+  "幼童友善（未滿 90cm）",
+  "小學門檻（90cm-110cm）",
+  "刺激挑戰（110cm 以上）",
+];
+
+const thrillFilterOptions = ["溫和型", "中度刺激", "高刺激"];
+const environmentFilterOptions = ["露天", "頂棚區"];
+const priceFilterOptions = ["🎠 基礎遊具（20～30 元）", "⭐ 委外精選設施（50～80 元）"];
+const specialFilterOptions = ["🤰 孕婦可搭乘", "♿ 無障礙標示", "❄️ 冷氣開放"];
+
+const defaultRideFilters: RideFilterState = {
+  height: null,
+  thrill: null,
+  environment: null,
+  price: null,
+  special: null,
+};
 
 function normalizePlaceName(name: string) {
   return name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
@@ -112,38 +155,110 @@ function clearMarker(marker: GoogleMapsLegacyMarker) {
 function getMarkerKind(point: TownPassPoint): MarkerKind {
   const text = `${point.name}${point.category}`.toLowerCase();
 
-  if (point.pointType === "restaurant" || text.includes("餐") || text.includes("食")) return "restaurant";
-  if (text.includes("廁") || text.includes("洗手間")) return "restroom";
-  if (text.includes("醫") || text.includes("急救")) return "firstAid";
-  if (text.includes("摩天輪")) return "ferrisWheel";
-  if (text.includes("飛車") || text.includes("小飛龍") || text.includes("雲霄")) return "coaster";
-  if (text.includes("旋轉木馬") || text.includes("海洋總動員")) return "carousel";
   if (text.includes("商店") || text.includes("超商") || text.includes("拍貼") || text.includes("化石")) return "shop";
-  if (text.includes("服務") || text.includes("資訊") || text.includes("普通設施")) return "info";
-  return point.pointType === "facility" ? "store" : "restaurant";
+  if (point.pointType === "restaurant" || text.includes("餐") || text.includes("食")) return "restaurant";
+  return "ferrisWheel";
+}
+
+function getPointContentType(point: TownPassPoint): MapContentType {
+  if (point.pointType === "facility") {
+    return "facility";
+  }
+
+  return getMarkerKind(point) === "shop" ? "shop" : "restaurant";
+}
+
+function isRidePoint(point: TownPassPoint) {
+  return (
+    point.pointType === "facility" &&
+    ["大型遊樂設施", "K系列", "A系列"].includes(point.category)
+  );
+}
+
+function getRecommendedHeightFilters(childHeight: string) {
+  const height = Number(childHeight);
+  if (!Number.isFinite(height) || height <= 0) {
+    return [];
+  }
+
+  if (height < 90) {
+    return ["幼童友善"];
+  }
+
+  if (height < 110) {
+    return ["幼童友善", "小學門檻"];
+  }
+
+  return ["幼童友善", "小學門檻", "刺激挑戰"];
+}
+
+function matchesTextFilter(value: string | null | undefined, filter: string | null) {
+  if (!filter) {
+    return true;
+  }
+
+  if (!value) {
+    return false;
+  }
+
+  return (
+    value.includes(filter) ||
+    (filter.includes("幼童友善") && value.includes("幼童友善")) ||
+    (filter.includes("小學門檻") && value.includes("小學門檻")) ||
+    (filter.includes("刺激挑戰") && value.includes("刺激挑戰"))
+  );
+}
+
+function matchesListFilter(values: string[] | undefined, filter: string | null) {
+  if (!filter) {
+    return true;
+  }
+
+  return Boolean(values?.some((value) => value.includes(filter)));
 }
 
 function getMarkerIconPath(kind: MarkerKind) {
   switch (kind) {
-    case "firstAid":
-      return '<path d="M25 25h22a4 4 0 0 1 4 4v21a4 4 0 0 1-4 4H25a4 4 0 0 1-4-4V29a4 4 0 0 1 4-4Z"/><path d="M30 25v-5a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v5"/><path d="M36 32v15M28.5 39.5h15"/>';
     case "restaurant":
       return '<path d="M28 16v38M22 16v14a6 6 0 0 0 12 0V16M44 16v38M44 16c6 3 8 9 6 17-1 4-3 7-6 8"/>';
-    case "store":
-      return '<path d="M21 30h30l-3-10H24l-3 10Z"/><path d="M24 30v22h24V30"/><path d="M21 30c1 5 6 5 8 0 2 5 7 5 9 0 2 5 7 5 9 0 2 5 7 5 8 0"/><path d="M34 52V41h8v11"/>';
-    case "info":
-      return '<circle cx="36" cy="36" r="19"/><path d="M36 33v15"/><path d="M36 25h.01"/>';
-    case "carousel":
-      return '<path d="M24 24h24"/><path d="M36 16v38"/><path d="M27 32c4-5 13-5 18 1l-3 10H30l-3-11Z"/><path d="M30 43l-4 7M42 43l4 7"/><path d="M43 31l5 3"/>';
+    case "ferrisWheel":
+      return '<circle cx="36" cy="33" r="17"/><circle cx="36" cy="33" r="3"/><path d="M36 36v18M25 56h22M29 54l7-18 7 18M36 16v-6M24 21l-4-4M48 21l4-4M19 33h-6M59 33h-6M24 45l-4 4M48 45l4 4"/><rect x="32" y="9" width="8" height="6" rx="2"/><rect x="16" y="29" width="8" height="6" rx="2"/><rect x="48" y="29" width="8" height="6" rx="2"/><rect x="20" y="45" width="8" height="6" rx="2"/><rect x="44" y="45" width="8" height="6" rx="2"/>';
     case "shop":
       return '<path d="M25 29h22l3 24H22l3-24Z"/><path d="M30 29v-5a6 6 0 0 1 12 0v5"/>';
-    case "restroom":
-      return '<circle cx="27" cy="21" r="4"/><circle cx="45" cy="21" r="4"/><path d="M27 29v23M21 36h12M45 29l8 23H37l8-23Z"/><path d="M36 18v38"/>';
-    case "ferrisWheel":
-      return '<circle cx="36" cy="31" r="15"/><circle cx="36" cy="31" r="3"/><path d="M36 31 25 53M36 31l11 22M26 53h20M36 16v30M21 31h30M25 20l22 22M47 20 25 42"/><rect x="33" y="12" width="6" height="5" rx="1"/><rect x="49" y="28" width="6" height="5" rx="1"/><rect x="33" y="45" width="6" height="5" rx="1"/><rect x="17" y="28" width="6" height="5" rx="1"/>';
-    case "coaster":
-      return '<path d="M18 51c10-24 22-24 36-3"/><path d="M18 51h36M22 51V37M34 51V30M46 51V39"/><path d="M23 29c8 5 16 5 26 0"/><circle cx="27" cy="25" r="2"/><circle cx="35" cy="24" r="2"/><circle cx="43" cy="25" r="2"/>';
   }
+}
+
+const facilityWaitSamples = [15, 25, 35, 45, 5];
+
+function getFacilityWaitMinutes(point: TownPassPoint) {
+  const hash = Array.from(point.id).reduce(
+    (total, char) => total + char.charCodeAt(0),
+    0,
+  );
+  return facilityWaitSamples[hash % facilityWaitSamples.length];
+}
+
+function getParkOperatingStatus(date: Date) {
+  const day = date.getDay();
+  const minutes = date.getHours() * 60 + date.getMinutes();
+
+  if (day === 1) {
+    return {
+      isOpen: false,
+      label: "週一定期保養休園",
+      hours: "週一休園（國定假日除外）",
+    };
+  }
+
+  const closeMinutes = day === 6 ? 20 * 60 : day === 0 ? 18 * 60 : 17 * 60;
+  const isOpen = minutes >= 9 * 60 && minutes < closeMinutes;
+  const closeHour = String(closeMinutes / 60).padStart(2, "0");
+
+  return {
+    isOpen,
+    label: isOpen ? "營業中" : "非營業時間",
+    hours: `今日 09:00 - ${closeHour}:00`,
+  };
 }
 
 function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: GoogleMapsNamespace) {
@@ -176,11 +291,11 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
-  const userMarkerRef = useRef<GoogleMapsMarker | null>(null);
+  const userMarkerRef = useRef<GoogleMapsLegacyMarker | null>(null);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
-    restaurants: true,
+    restaurants: false,
   });
   const [statusText, setStatusText] = useState(
     googleMapsApiKey
@@ -188,13 +303,22 @@ export function TownPassMap() {
       : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
   );
   const [query, setQuery] = useState("");
-  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(true);
+  const [selectedContentType, setSelectedContentType] = useState<MapContentType>("facility");
+  const [childHeight, setChildHeight] = useState("");
+  const [rideFilters, setRideFilters] = useState<RideFilterState>(defaultRideFilters);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<TownPassPoint | null>(null);
   const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
   const [placeDetails, setPlaceDetails] = useState<PlaceDetail[]>([]);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,42 +423,6 @@ export function TownPassMap() {
     };
   }, []);
 
-  const categories = useMemo(
-    () => Array.from(new Set(allPoints.map((point) => point.category))).sort(),
-    [allPoints],
-  );
-
-  const floors = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          allPoints
-            .map((point) => point.floor)
-            .filter((floor): floor is number => typeof floor === "number"),
-        ),
-      ).sort((a, b) => a - b),
-    [allPoints],
-  );
-
-  const visiblePoints = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return allPoints.filter((point) => {
-      if (point.pointType === "facility" && !layers.facilities) return false;
-      if (point.pointType === "restaurant" && !layers.restaurants) return false;
-      if (selectedCategory && point.category !== selectedCategory) return false;
-      if (selectedFloor !== null && point.floor !== selectedFloor) return false;
-
-      return (
-        normalizedQuery.length === 0 ||
-        point.name.toLowerCase().includes(normalizedQuery) ||
-        point.category.toLowerCase().includes(normalizedQuery)
-      );
-    });
-  }, [allPoints, layers, query, selectedCategory, selectedFloor]);
-
-  const selectedPointId = selectedPoint?.id ?? null;
-
   const placeDetailsByName = useMemo(() => {
     const detailMap = new Map<string, PlaceDetail>();
     placeDetails.forEach((detail) => {
@@ -344,6 +432,86 @@ export function TownPassMap() {
     });
     return detailMap;
   }, [placeDetails]);
+
+  const categories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allPoints
+            .filter((point) => getPointContentType(point) === selectedContentType)
+            .filter((point) => selectedContentType !== "facility" || isRidePoint(point))
+            .map((point) => point.category),
+        ),
+      ).sort(),
+    [allPoints, selectedContentType],
+  );
+
+  const floors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allPoints
+            .filter((point) => getPointContentType(point) === selectedContentType)
+            .filter((point) => selectedContentType !== "facility" || isRidePoint(point))
+            .map((point) => point.floor)
+            .filter((floor): floor is number => typeof floor === "number"),
+        ),
+      ).sort((a, b) => a - b),
+    [allPoints, selectedContentType],
+  );
+
+  const visiblePoints = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const recommendedHeightFilters = getRecommendedHeightFilters(childHeight);
+
+    return allPoints.filter((point) => {
+      if (point.pointType === "facility" && !layers.facilities) return false;
+      if (point.pointType === "restaurant" && !layers.restaurants) return false;
+      if (getPointContentType(point) !== selectedContentType) return false;
+      if (selectedContentType === "facility" && !isRidePoint(point)) return false;
+      if (selectedCategory && point.category !== selectedCategory) return false;
+      if (selectedFloor !== null && point.floor !== selectedFloor) return false;
+
+      if (selectedContentType === "facility") {
+        const detail = placeDetailsByName.get(normalizePlaceName(point.name));
+        const filters = detail?.filters;
+        const combinedSpecial = [
+          ...(filters?.special ?? []),
+          ...(filters?.environment ?? []),
+        ];
+
+        if (!matchesTextFilter(filters?.height, rideFilters.height)) return false;
+        if (!matchesTextFilter(filters?.thrill, rideFilters.thrill)) return false;
+        if (!matchesListFilter(filters?.environment, rideFilters.environment)) return false;
+        if (!matchesTextFilter(filters?.price, rideFilters.price)) return false;
+        if (!matchesListFilter(combinedSpecial, rideFilters.special)) return false;
+        if (
+          recommendedHeightFilters.length > 0 &&
+          !recommendedHeightFilters.some((heightFilter) => filters?.height?.includes(heightFilter))
+        ) {
+          return false;
+        }
+      }
+
+      return (
+        normalizedQuery.length === 0 ||
+        point.name.toLowerCase().includes(normalizedQuery) ||
+        point.category.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [
+    allPoints,
+    childHeight,
+    layers,
+    placeDetailsByName,
+    query,
+    rideFilters,
+    selectedCategory,
+    selectedContentType,
+    selectedFloor,
+  ]);
+
+  const selectedPointId = selectedPoint?.id ?? null;
 
   const focusPoint = (point: TownPassPoint) => {
     const marker = markersRef.current.find((entry) => entry.pointId === point.id)?.marker;
@@ -398,20 +566,16 @@ export function TownPassMap() {
     }
   }, [selectedPointId, userPosition, visiblePoints]);
 
-  const summaryText = useMemo(() => {
-    const facilityCount = visiblePoints.filter((point) => point.pointType === "facility").length;
-    const restaurantCount = visiblePoints.filter(
-      (point) => point.pointType === "restaurant",
-    ).length;
-    return `設施 ${facilityCount} 筆、餐飲 ${restaurantCount} 筆`;
-  }, [visiblePoints]);
+  const hasActiveRideFilters =
+    childHeight.trim().length > 0 ||
+    Object.values(rideFilters).some((value) => value !== null);
 
   const hasActiveFilters =
     query.trim().length > 0 ||
-    !layers.facilities ||
-    !layers.restaurants ||
+    selectedContentType !== "facility" ||
     selectedCategory !== null ||
-    selectedFloor !== null;
+    selectedFloor !== null ||
+    hasActiveRideFilters;
 
   const selectedPlaceDetail = selectedPoint
     ? placeDetailsByName.get(normalizePlaceName(selectedPoint.name)) ?? null
@@ -427,9 +591,39 @@ export function TownPassMap() {
     ].filter((tag): tag is string => Boolean(tag))
     : [];
 
+  const selectedOperatingStatus = useMemo(
+    () => getParkOperatingStatus(currentTime),
+    [currentTime],
+  );
+  const selectedWaitMinutes =
+    selectedPoint?.pointType === "facility" ? getFacilityWaitMinutes(selectedPoint) : null;
+
+  const selectContentType = (contentType: MapContentType) => {
+    setSelectedContentType(contentType);
+    setLayers({
+      facilities: contentType === "facility",
+      restaurants: contentType !== "facility",
+    });
+    setSelectedCategory(null);
+    setSelectedFloor(null);
+    setSelectedPoint(null);
+
+    if (contentType !== "facility") {
+      setChildHeight("");
+      setRideFilters(defaultRideFilters);
+    }
+  };
+
+  const setRideFilter = (key: keyof RideFilterState, value: string) => {
+    setRideFilters((prev) => ({ ...prev, [key]: value || null }));
+  };
+
   const resetFilters = () => {
     setQuery("");
-    setLayers({ facilities: true, restaurants: true });
+    setLayers({ facilities: true, restaurants: false });
+    setSelectedContentType("facility");
+    setChildHeight("");
+    setRideFilters(defaultRideFilters);
     setSelectedCategory(null);
     setSelectedFloor(null);
   };
@@ -449,6 +643,25 @@ export function TownPassMap() {
       />
 
       <div className="absolute left-0 right-0 top-0 z-20 space-y-2 px-4 py-3">
+        <div className="grid grid-cols-3 gap-2 rounded-xl border border-grayscale-100 bg-white p-1 shadow-sm">
+          {contentTypeOptions.map(({ value, label, Icon }) => {
+            const selected = selectedContentType === value;
+            return (
+              <button
+                key={value}
+                onClick={() => selectContentType(value)}
+                className={`flex h-10 items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition active:scale-95 ${selected
+                    ? "bg-primary text-white"
+                    : "text-grayscale-600"
+                  }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grayscale-500" />
@@ -474,70 +687,108 @@ export function TownPassMap() {
 
         {filterPanelOpen && (
           <div className="space-y-2 rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              <button
-                onClick={() =>
-                  setLayers((prev) => ({ ...prev, facilities: !prev.facilities }))
-                }
-                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${layers.facilities
-                    ? "bg-primary text-white"
-                    : "bg-grayscale-100 text-grayscale-700"
-                  }`}
-              >
-                設施
-              </button>
-              <button
-                onClick={() =>
-                  setLayers((prev) => ({ ...prev, restaurants: !prev.restaurants }))
-                }
-                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${layers.restaurants
-                    ? "bg-red-500 text-white"
-                    : "bg-grayscale-100 text-grayscale-700"
-                  }`}
-              >
-                餐飲
-              </button>
+            {selectedContentType === "facility" && (
+              <div className="space-y-3">
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  <label className="relative shrink-0">
+                    <select
+                      value={rideFilters.height ?? ""}
+                      onChange={(event) => setRideFilter("height", event.target.value)}
+                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.height
+                          ? "border-primary bg-primary text-white"
+                          : "border-grayscale-100 bg-white text-grayscale-700"
+                        }`}
+                    >
+                      <option value="">身高限制</option>
+                      {heightFilterOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  </label>
 
-              <label className="relative shrink-0">
-                <select
-                  value={selectedCategory ?? ""}
-                  onChange={(event) => setSelectedCategory(event.target.value || null)}
-                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${selectedCategory
-                      ? "border-primary bg-primary text-white"
-                      : "border-grayscale-100 bg-white text-grayscale-700"
-                    }`}
-                >
-                  <option value="">類型</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-              </label>
+                  <label className="relative shrink-0">
+                    <select
+                      value={rideFilters.thrill ?? ""}
+                      onChange={(event) => setRideFilter("thrill", event.target.value)}
+                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.thrill
+                          ? "border-primary bg-primary text-white"
+                          : "border-grayscale-100 bg-white text-grayscale-700"
+                        }`}
+                    >
+                      <option value="">尖叫指數</option>
+                      {thrillFilterOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  </label>
 
-              <label className="relative shrink-0">
-                <select
-                  value={selectedFloor ?? ""}
-                  onChange={(event) =>
-                    setSelectedFloor(event.target.value ? Number(event.target.value) : null)
-                  }
-                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${selectedFloor !== null
-                      ? "border-primary bg-primary text-white"
-                      : "border-grayscale-100 bg-white text-grayscale-700"
-                    }`}
-                >
-                  <option value="">樓層</option>
-                  {floors.map((floor) => (
-                    <option key={floor} value={floor}>
-                      {floor} 樓
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-              </label>
-            </div>
+                  <label className="relative shrink-0">
+                    <select
+                      value={rideFilters.environment ?? ""}
+                      onChange={(event) => setRideFilter("environment", event.target.value)}
+                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.environment
+                          ? "border-primary bg-primary text-white"
+                          : "border-grayscale-100 bg-white text-grayscale-700"
+                        }`}
+                    >
+                      <option value="">室內外</option>
+                      {environmentFilterOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  </label>
+
+                  <label className="relative shrink-0">
+                    <select
+                      value={rideFilters.price ?? ""}
+                      onChange={(event) => setRideFilter("price", event.target.value)}
+                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.price
+                          ? "border-primary bg-primary text-white"
+                          : "border-grayscale-100 bg-white text-grayscale-700"
+                        }`}
+                    >
+                      <option value="">票價／類型</option>
+                      {priceFilterOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  </label>
+
+                  <label className="relative shrink-0">
+                    <select
+                      value={rideFilters.special ?? ""}
+                      onChange={(event) => setRideFilter("special", event.target.value)}
+                      className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${rideFilters.special
+                          ? "border-primary bg-primary text-white"
+                          : "border-grayscale-100 bg-white text-grayscale-700"
+                        }`}
+                    >
+                      <option value="">特殊族群</option>
+                      {specialFilterOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                  </label>
+                </div>
+              </div>
+            )}
+
+
 
             <div className="flex justify-end">
               <button
@@ -600,6 +851,14 @@ export function TownPassMap() {
                     <MapPin className="h-3.5 w-3.5" />
                     {getFloorText(selectedPoint.floor)}
                   </p>
+                  {selectedWaitMinutes !== null && (
+                    <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary">
+                      <Clock className="h-3.5 w-3.5" />
+                      {selectedOperatingStatus.isOpen
+                        ? `等待 ${selectedWaitMinutes} 分鐘`
+                        : selectedOperatingStatus.label}
+                    </p>
+                  )}
                 </button>
                 <button
                   onClick={() => focusPoint(selectedPoint)}
@@ -633,6 +892,25 @@ export function TownPassMap() {
                     </div>
                   </div>
 
+                  {selectedWaitMinutes !== null && (
+                    <div className="rounded-xl bg-primary-50 p-4">
+                      <div className="flex items-center gap-2 text-primary">
+                        <Clock className="h-4 w-4" />
+                        <p className="text-sm font-semibold">
+                          {selectedOperatingStatus.isOpen ? "目前等待時間" : "營業狀態"}
+                        </p>
+                      </div>
+                      <p className="mt-2 font-display text-2xl font-semibold text-grayscale-900">
+                        {selectedOperatingStatus.isOpen
+                          ? `${selectedWaitMinutes} 分鐘`
+                          : selectedOperatingStatus.label}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-grayscale-500">
+                        {selectedOperatingStatus.hours}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="rounded-xl bg-primary-50 p-4">
                     <div className="flex items-center gap-2 text-primary">
                       <Clock className="h-4 w-4" />
@@ -665,27 +943,38 @@ export function TownPassMap() {
               )}
             </div>
           ) : (
-            <div className="flex gap-2 overflow-x-auto no-scrollbar">
-              {visiblePoints.slice(0, 12).map((point) => (
+            <div 
+              className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory"
+              onScroll={(e) => {
+                const container = e.currentTarget;
+                const index = Math.round(container.scrollLeft / container.offsetWidth);
+                const activePoint = visiblePoints[index];
+                if (activePoint && mapRef.current && container.dataset.activeIndex !== String(index)) {
+                  container.dataset.activeIndex = String(index);
+                  mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+                }
+              }}
+            >
+              {visiblePoints.map((point) => (
                 <button
                   key={point.id}
                   onClick={() => focusPoint(point)}
-                  className="min-w-[160px] rounded-lg border border-grayscale-100 bg-white p-2 text-left active:scale-95"
+                  className="w-full min-w-full shrink-0 snap-center rounded-lg border border-grayscale-100 bg-white p-3 text-left active:scale-95"
                 >
-                  <div className="mb-1 flex items-center gap-1">
+                  <div className="mb-2 flex items-center gap-1.5">
                     <span
-                      className={`h-2 w-2 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
+                      className={`h-2.5 w-2.5 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
                         }`}
                     />
-                    <span className="text-[10px] font-bold text-grayscale-500">
+                    <span className="text-[11px] font-bold text-grayscale-500">
                       {getPointLabel(point.pointType)}
                     </span>
                   </div>
-                  <p className="truncate text-sm font-semibold text-grayscale-900">
+                  <p className="truncate text-base font-semibold text-grayscale-900">
                     {point.name}
                   </p>
-                  <p className="mt-1 truncate text-[10px] font-medium text-grayscale-500">
-                    {point.category} / {getFloorText(point.floor)}
+                  <p className="mt-1 truncate text-xs font-medium text-grayscale-500">
+                    {point.category}
                   </p>
                 </button>
               ))}
