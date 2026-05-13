@@ -1,56 +1,187 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
-import { HelpCircle, Bus, Info, Calendar, Users, ChevronDown, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { HelpCircle, Info, Calendar, Users, ChevronDown, ArrowRight, Bus, Navigation, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
 import { townPassFaqData } from '@/src/lib/townpass-faq-data';
 
 const homeQuickFaqs = townPassFaqData.filter((item) => item.featured).slice(0, 4);
+const PARK_LAT = 25.0974;
+const PARK_LNG = 121.5151;
+const GOOGLE_MAPS_NAV_URL = `https://www.google.com/maps/dir/?api=1&destination=${PARK_LAT},${PARK_LNG}&travelmode=transit`;
+const recentActivities = [
+  {
+    image: IMAGES.BANNER,
+    title: '夏季嘉年華：星光遊行',
+    subtitle: '每日 19:00 準時開始',
+  },
+  {
+    image: IMAGES.FIREWORKS,
+    title: '週末煙火秀',
+    subtitle: '每週六、日 20:00 登場',
+  },
+  {
+    image: IMAGES.FOOD,
+    title: '美食街 85 折優惠',
+    subtitle: '會員出示 App 即享折扣',
+  },
+];
+
+const activityCards = [
+  {
+    image: IMAGES.FOOD,
+    title: '美食街 85 折優惠',
+    description: '出示 App 會員即享優惠',
+    date: '即日起',
+  },
+  {
+    image: IMAGES.FIREWORKS,
+    title: '週末煙火秀',
+    description: '每週六、日晚上 8 點',
+    date: '週末限定',
+  },
+];
 
 export function HomePage() {
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveBannerIndex((current) => (current + 1) % recentActivities.length);
+    }, 4500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const navigateFromCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      window.open(GOOGLE_MAPS_NAV_URL, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&origin=${latitude},${longitude}&destination=${PARK_LAT},${PARK_LNG}&travelmode=transit`,
+          '_blank',
+          'noopener,noreferrer',
+        );
+        setIsLocating(false);
+      },
+      () => {
+        setLocationMessage('未取得目前位置，已改為開啟園區導航頁。');
+        window.open(GOOGLE_MAPS_NAV_URL, '_blank', 'noopener,noreferrer');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   return (
     <div className="px-4 space-y-6 pb-6">
       {/* Banner */}
       <section className="mt-4">
         <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-sm">
-          <Image className="object-cover" src={IMAGES.BANNER} alt="Summer Carnival" fill sizes="100vw" priority />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-4">
-            <h2 className="text-white font-display font-semibold text-lg">夏季嘉年華：星光遊行</h2>
-            <p className="text-white/90 text-xs">每日 19:00 準時開始</p>
+          {recentActivities.map((activity, index) => (
+            <Image
+              key={activity.title}
+              className={`object-cover transition-opacity duration-500 ${
+                activeBannerIndex === index ? 'opacity-100' : 'opacity-0'
+              }`}
+              src={activity.image}
+              alt={activity.title}
+              fill
+              sizes="100vw"
+              priority={index === 0}
+            />
+          ))}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent flex flex-col justify-end p-4">
+            <h2 className="text-white font-display font-semibold text-lg">{recentActivities[activeBannerIndex].title}</h2>
+            <p className="text-white/90 text-xs">{recentActivities[activeBannerIndex].subtitle}</p>
           </div>
+          <button
+            onClick={() =>
+              setActiveBannerIndex((current) =>
+                current === 0 ? recentActivities.length - 1 : current - 1,
+              )
+            }
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm transition active:scale-95"
+            aria-label="上一則活動"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setActiveBannerIndex((current) => (current + 1) % recentActivities.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/30 p-1.5 text-white backdrop-blur-sm transition active:scale-95"
+            aria-label="下一則活動"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            <div className="w-3 h-1 bg-primary-500 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-grayscale-300 rounded-full" />
-            <div className="w-1.5 h-1.5 bg-grayscale-300 rounded-full" />
+            {recentActivities.map((activity, index) => (
+              <button
+                key={`dot-${activity.title}`}
+                onClick={() => setActiveBannerIndex(index)}
+                className={`h-1.5 rounded-full transition-all ${
+                  activeBannerIndex === index ? 'w-5 bg-white' : 'w-1.5 bg-white/55'
+                }`}
+                aria-label={`切換到活動 ${index + 1}`}
+              />
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Service Grid */}
-      <section className="grid grid-cols-4 gap-2">
-        {[
-          { icon: HelpCircle, label: '常見問題', href: '/faq' },
-          { icon: Bus, label: '交通方式', href: '/faq' },
-          { icon: Info, label: '遊園資訊', href: '/faq' },
-          { icon: Calendar, label: '設施預約', href: '/events' },
-        ].map((item, idx) => (
-          <Link
-            key={idx}
-            href={item.href}
-            className="flex flex-col items-center gap-1 transition active:scale-95"
-          >
-            <div className="w-14 h-14 bg-white border border-grayscale-100 rounded-full flex items-center justify-center shadow-sm">
-              <item.icon className="w-6 h-6 text-primary" />
-            </div>
-            <span className="text-[10px] text-grayscale-700 font-medium">{item.label}</span>
+      {/* Transport */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">交通方式</h3>
+            <Bus className="h-4 w-4 text-primary" />
+          </div>
+          <Link href="/transport" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
+            查看更多 <ArrowRight className="w-4 h-4" />
           </Link>
-        ))}
+        </div>
+
+        <div className="space-y-2 border-y border-grayscale-100 py-3">
+          <div className="flex items-start gap-2 text-sm text-grayscale-700">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="font-semibold text-grayscale-900">兒童新樂園</p>
+              <p>台北市士林區承德路五段 55 號（近劍潭／士林站）</p>
+              <button
+                onClick={navigateFromCurrentLocation}
+                disabled={isLocating}
+                className="mt-2 inline-flex items-center gap-1 border border-primary px-3 py-2 text-xs font-semibold text-primary transition disabled:opacity-60 active:scale-95"
+              >
+                <Navigation className="h-3.5 w-3.5" />
+                {isLocating ? '定位中...' : '從目前位置導航'}
+              </button>
+            </div>
+          </div>
+          {locationMessage && <p className="text-xs text-grayscale-500">{locationMessage}</p>}
+        </div>
       </section>
 
       {/* Real-time Info */}
       <section className="space-y-3">
-        <div className="flex justify-between items-end">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
-          <span className="text-primary font-semibold text-sm">查看更多</span>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
+            <Info className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-semibold text-sm text-primary">查看更多</span>
         </div>
         <div className="flex flex-col gap-4">
           <div className="bg-white border border-grayscale-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
@@ -90,22 +221,25 @@ export function HomePage() {
 
       {/* FAQ Preview */}
       <section className="space-y-3">
-        <div className="flex justify-between items-end">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+            <HelpCircle className="h-4 w-4 text-primary" />
+          </div>
           <Link href="/faq" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
             查看完整 FAQ <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
-        <div className="space-y-2">
+        <div className="divide-y divide-grayscale-200 border-y border-grayscale-100">
           {homeQuickFaqs.map((faq) => (
             <details
               key={faq.id}
-              className="group rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm open:border-primary/30"
+              className="group bg-transparent py-3"
             >
               <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                 <div>
-                  <span className="inline-block rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary-700">
+                  <span className="inline-block border-l-2 border-primary pl-2 text-[10px] font-bold text-primary-700">
                     {faq.category}
                   </span>
                   <h4 className="mt-1 text-sm font-semibold text-grayscale-900">{faq.question}</h4>
@@ -127,28 +261,36 @@ export function HomePage() {
 
       {/* Activities */}
       <section className="space-y-3 pb-8">
-        <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
-        <div className="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 no-scrollbar snap-x">
-          <div className="flex-shrink-0 w-72 bg-white border border-grayscale-100 rounded-xl overflow-hidden snap-start shadow-sm">
-            <div className="relative h-40">
-              <Image className="object-cover" src={IMAGES.FOOD} alt="Food Discount" fill sizes="288px" />
-            </div>
-            <div className="p-3 space-y-1">
-              <span className="inline-block px-2 py-0.5 bg-orange-500/10 text-orange-500 text-[10px] font-bold rounded-full">限時優惠</span>
-              <h4 className="font-display font-semibold text-grayscale-900">美食街 85 折優惠</h4>
-              <p className="text-grayscale-500 text-sm">出示 App 會員即享優惠</p>
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-72 bg-white border border-grayscale-100 rounded-xl overflow-hidden snap-start shadow-sm">
-            <div className="relative h-40">
-              <Image className="object-cover" src={IMAGES.FIREWORKS} alt="Fireworks" fill sizes="288px" />
-            </div>
-            <div className="p-3 space-y-1">
-              <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-bold rounded-full">特別表演</span>
-              <h4 className="font-display font-semibold text-grayscale-900">週末煙火秀</h4>
-              <p className="text-grayscale-500 text-sm">每週六、日晚上 8 點</p>
-            </div>
-          </div>
+        <div className="flex items-center">
+          <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
+          <Calendar className="ml-1 h-4 w-4 text-primary" />
+        </div>
+        <div className="flex overflow-x-auto gap-4 pb-4 pl-1 pr-1 no-scrollbar snap-x snap-mandatory">
+          {activityCards.map((activity) => (
+            <article
+              key={activity.title}
+              className="flex-shrink-0 w-[86%] border border-grayscale-100 bg-white snap-start overflow-hidden shadow-sm"
+            >
+              <div className="relative h-44">
+                <Image className="object-cover" src={activity.image} alt={activity.title} fill sizes="320px" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                <div className="absolute left-3 top-3 inline-flex items-center gap-1 bg-white/90 px-2 py-1 text-[10px] font-semibold text-grayscale-700">
+                  <Calendar className="h-3 w-3 text-primary" />
+                  {activity.date}
+                </div>
+                <div className="absolute left-3 right-3 bottom-3">
+                  <h4 className="font-display text-2xl font-semibold text-white">{activity.title}</h4>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <p className="text-sm text-grayscale-600">{activity.description}</p>
+                <button className="inline-flex shrink-0 items-center gap-1 border border-primary px-2.5 py-1.5 text-xs font-semibold text-primary transition active:scale-95">
+                  立即查看
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
     </div>

@@ -1,54 +1,74 @@
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=Source+Sans+3:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Public Sans", sans-serif;
+  --font-sans: "PingFang TC", "PingFang SC", "PingFang HK", "Roboto", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "PingFang TC", "PingFang SC", "PingFang HK", "Roboto", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
 
-  --color-surface: #f7fafb;
-  --color-surface-dim: #d7dbdc;
-  --color-surface-bright: #f7fafb;
+  /* Primary backgrounds */
+  --color-surface: #ffffff;
+  --color-surface-dim: #e3e7e9;
+  --color-surface-bright: #ffffff;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f1f4f5;
-  --color-surface-container: #ebeeef;
-  --color-surface-container-high: #e5e9ea;
-  --color-surface-container-highest: #dfe3e4;
-  --color-on-surface: #181c1d;
-  --color-on-surface-variant: #3e494b;
-  --color-inverse-surface: #2d3132;
-  --color-inverse-on-surface: #eef1f2;
+  --color-surface-container-low: #f1f3f4;
+  --color-surface-container: #e3e7e9;
+  --color-surface-container-high: #cad1d5;
+  --color-surface-container-highest: #adb8be;
+  --color-on-surface: #30383d;
+  --color-on-surface-variant: #475259;
+  --color-inverse-surface: #171b1d;
+  --color-inverse-on-surface: #f1f3f4;
   
+  /* Primary (brand) */
   --color-primary: #006876;
   --color-on-primary: #ffffff;
   --color-primary-container: #5ab4c5;
   --color-on-primary-container: #00434d;
   
-  --color-secondary: #7d5700;
-  --color-secondary-container: #fec252;
-  --color-on-secondary-container: #725000;
+  /* Secondary */
+  --color-secondary: #f5ba4b;
+  --color-secondary-container: #fcf2df;
+  --color-on-secondary-container: #3c2b0b;
 
-  --color-primary-50: #EDF8FA;
-  --color-primary-100: #DBF1F5;
-  --color-primary-200: #B4E2EA;
-  --color-primary-300: #93D4DF;
-  --color-primary-400: #71C5D5;
-  --color-primary-500: #5AB4C5;
-  --color-primary-600: #468D9B;
-  --color-primary-700: #356C77;
-  --color-primary-800: #22474E;
+  --color-primary-50: #edf8fa;
+  --color-primary-100: #dbf1f5;
+  --color-primary-200: #b4e2ea;
+  --color-primary-300: #93d4df;
+  --color-primary-400: #71c5d5;
+  --color-primary-500: #5ab4c5;
+  --color-primary-600: #468d9b;
+  --color-primary-700: #356c77;
+  --color-primary-800: #22474e;
   --color-primary-900: #112629;
 
-  --color-grayscale-50: #F1F3F4;
-  --color-grayscale-100: #E3E7E9;
-  --color-grayscale-200: #CAD1D5;
-  --color-grayscale-300: #ADB8BE;
-  --color-grayscale-500: #738995;
-  --color-grayscale-700: #475259;
-  --color-grayscale-800: #30383D;
-  --color-grayscale-900: #171B1D;
+  --color-secondary-50: #fdf8ed;
+  --color-secondary-100: #fcf2df;
+  --color-secondary-200: #f8e3bc;
+  --color-secondary-300: #f4d69e;
+  --color-secondary-400: #f0c87c;
+  --color-secondary-500: #f5ba4b;
+  --color-secondary-600: #e7a43c;
+  --color-secondary-700: #ad7b2b;
+  --color-secondary-800: #74521b;
+  --color-secondary-900: #3c2b0b;
+  --color-secondary-950: #1c1304;
 
-  --color-orange-500: #FD853A;
-  --color-red-500: #D45251;
+  --color-grayscale-50: #f1f3f4;
+  --color-grayscale-100: #e3e7e9;
+  --color-grayscale-200: #cad1d5;
+  --color-grayscale-300: #adb8be;
+  --color-grayscale-400: #91a0a8;
+  --color-grayscale-500: #738995;
+  --color-grayscale-600: #5e6d76;
+  --color-grayscale-700: #475259;
+  --color-grayscale-800: #30383d;
+  --color-grayscale-900: #171b1d;
+  --color-grayscale-950: #0b0d0e;
+
+  --color-red-300: #e29494;
+  --color-red-500: #d45251;
+  --color-orange-300: #f4b992;
+  --color-orange-500: #fd853a;
 
   --radius-xs: 0.25rem;
   --radius-md: 0.75rem;
@@ -57,8 +77,23 @@
 }
 
 @layer base {
+  :root {
+    --font-h1-size: 36px;
+    --font-h1-line-height: 48px;
+    --font-h2-size: 24px;
+    --font-h2-line-height: 32px;
+    --font-h3-size: 16px;
+    --font-h3-line-height: 22px;
+    --font-body-size: 14px;
+    --font-body-line-height: 20px;
+    --font-caption-size: 12px;
+    --font-caption-line-height: 18px;
+  }
+
   body {
     @apply bg-surface text-on-surface font-sans;
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
   }
 }
 
