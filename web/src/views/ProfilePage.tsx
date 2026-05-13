@@ -11,7 +11,7 @@ export function ProfilePage() {
           <Image src={IMAGES.PROFILE_PIC} alt="Profile" className="object-cover" fill sizes="64px" />
         </div>
         <div className="space-y-1">
-          <h2 className="font-display font-semibold text-xl text-grayscale-900">陳大文</h2>
+          <h2 className="font-display font-semibold text-xl text-grayscale-900">趙式隆</h2>
           <div className="inline-flex items-center px-2 py-1 rounded-full bg-secondary-container text-on-secondary-container font-semibold text-[10px]">
             <Star className="w-3 h-3 mr-1 fill-current" />
             金卡會員

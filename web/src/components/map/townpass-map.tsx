@@ -1,0 +1,243 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { loadGoogleMapsScript } from "@/src/lib/google-maps-service";
+import {
+  loadTownPassPoints,
+  parkCenter,
+  type TownPassPoint,
+} from "@/src/lib/townpass-map-data";
+
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+type GoogleMapsMap = {
+  fitBounds: (bounds: GoogleMapsLatLngBounds, padding?: number) => void;
+  panTo: (position: { lat: number; lng: number }) => void;
+  setZoom: (zoom: number) => void;
+};
+
+type GoogleMapsMarker = {
+  addListener: (eventName: string, callback: () => void) => void;
+  setMap: (map: GoogleMapsMap | null) => void;
+};
+
+type GoogleMapsInfoWindow = {
+  setContent: (content: string) => void;
+  open: (options: { map: GoogleMapsMap; anchor: GoogleMapsMarker }) => void;
+};
+
+type GoogleMapsLatLngBounds = {
+  extend: (position: { lat: number; lng: number }) => void;
+};
+
+type GoogleMapsNamespace = {
+  Map: new (
+    element: HTMLElement,
+    options: Record<string, unknown>,
+  ) => GoogleMapsMap;
+  Marker: new (options: Record<string, unknown>) => GoogleMapsMarker;
+  InfoWindow: new () => GoogleMapsInfoWindow;
+  LatLngBounds: new () => GoogleMapsLatLngBounds;
+  Size: new (width: number, height: number) => unknown;
+};
+
+type MapLayerState = {
+  facilities: boolean;
+  restaurants: boolean;
+};
+
+type MarkerEntry = {
+  marker: GoogleMapsMarker;
+};
+
+const facilityIconUrl = "https://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+const restaurantIconUrl = "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
+
+function getMapsNamespace(): GoogleMapsNamespace | null {
+  const maps = window.google?.maps;
+  if (!maps) {
+    return null;
+  }
+  return maps as unknown as GoogleMapsNamespace;
+}
+
+export function TownPassMap() {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<GoogleMapsMap | null>(null);
+  const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
+  const markersRef = useRef<MarkerEntry[]>([]);
+
+  const [layers, setLayers] = useState<MapLayerState>({
+    facilities: true,
+    restaurants: true,
+  });
+  const [statusText, setStatusText] = useState(
+    googleMapsApiKey
+      ? "地圖初始化中..."
+      : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
+  );
+  const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
+
+  useEffect(() => {
+    if (!googleMapsApiKey) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const initMap = async () => {
+      try {
+        await loadGoogleMapsScript(googleMapsApiKey);
+        const maps = getMapsNamespace();
+        if (cancelled || !mapContainerRef.current || !maps) {
+          return;
+        }
+
+        const map = new maps.Map(mapContainerRef.current, {
+          center: parkCenter,
+          zoom: 17,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          clickableIcons: false,
+        });
+        mapRef.current = map;
+        infoWindowRef.current = new maps.InfoWindow();
+
+        const { allPoints: loadedPoints } = await loadTownPassPoints();
+        if (cancelled) {
+          return;
+        }
+
+        setAllPoints(loadedPoints);
+        setStatusText(
+          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
+        );
+      } catch {
+        if (!cancelled) {
+          setStatusText("Google Maps 載入失敗，請檢查 API Key 或網路。");
+        }
+      }
+    };
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      markersRef.current.forEach((entry) => entry.marker.setMap(null));
+      markersRef.current = [];
+      infoWindowRef.current = null;
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const maps = getMapsNamespace();
+    if (!mapRef.current || !maps) {
+      return;
+    }
+
+    markersRef.current.forEach((entry) => entry.marker.setMap(null));
+    markersRef.current = [];
+
+    const visiblePoints = allPoints.filter((point) => {
+      if (point.pointType === "facility" && !layers.facilities) return false;
+      if (point.pointType === "restaurant" && !layers.restaurants) return false;
+      return true;
+    });
+
+    const bounds = new maps.LatLngBounds();
+
+    visiblePoints.forEach((point) => {
+      const marker = new maps.Marker({
+        position: { lat: point.lat, lng: point.lng },
+        map: mapRef.current,
+        title: point.name,
+        icon: {
+          url: point.pointType === "facility" ? facilityIconUrl : restaurantIconUrl,
+          scaledSize: new maps.Size(34, 34),
+        },
+      });
+
+      marker.addListener("click", () => {
+        const floorText =
+          typeof point.floor === "number" ? `${point.floor} 樓` : "樓層未標示";
+        const label = point.pointType === "facility" ? "設施" : "餐飲";
+
+        infoWindowRef.current?.setContent(`
+          <div style="min-width:180px;padding:4px 2px;">
+            <div style="font-size:14px;font-weight:700;margin-bottom:4px;">${point.name}</div>
+            <div style="font-size:12px;color:#475259;">類型：${label} / ${point.category}</div>
+            <div style="font-size:12px;color:#475259;">位置：${floorText}</div>
+          </div>
+        `);
+
+        if (mapRef.current && infoWindowRef.current) {
+          infoWindowRef.current.open({
+            map: mapRef.current,
+            anchor: marker,
+          });
+        }
+      });
+
+      markersRef.current.push({ marker });
+      bounds.extend({ lat: point.lat, lng: point.lng });
+    });
+
+    if (visiblePoints.length > 1) {
+      mapRef.current.fitBounds(bounds, 48);
+    } else if (visiblePoints.length === 1) {
+      mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
+      mapRef.current.setZoom(18);
+    }
+  }, [allPoints, layers]);
+
+  const summaryText = useMemo(() => {
+    const facilityCount = allPoints.filter((point) => point.pointType === "facility").length;
+    const restaurantCount = allPoints.filter(
+      (point) => point.pointType === "restaurant",
+    ).length;
+    return `設施 ${facilityCount} 筆、餐飲 ${restaurantCount} 筆`;
+  }, [allPoints]);
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() =>
+              setLayers((prev) => ({ ...prev, facilities: !prev.facilities }))
+            }
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              layers.facilities
+                ? "bg-primary text-white"
+                : "bg-grayscale-100 text-grayscale-700"
+            }`}
+          >
+            設施
+          </button>
+          <button
+            onClick={() =>
+              setLayers((prev) => ({ ...prev, restaurants: !prev.restaurants }))
+            }
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              layers.restaurants
+                ? "bg-red-500 text-white"
+                : "bg-grayscale-100 text-grayscale-700"
+            }`}
+          >
+            餐飲
+          </button>
+          <span className="ml-auto text-xs text-grayscale-500">{summaryText}</span>
+        </div>
+
+        <div
+          ref={mapContainerRef}
+          className="h-[420px] w-full rounded-lg border border-grayscale-100 bg-grayscale-50"
+        />
+      </div>
+
+      <p className="text-xs text-grayscale-600">{statusText}</p>
+    </section>
+  );
+}

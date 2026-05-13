@@ -1,0 +1,33 @@
+{
+"type": "FeatureCollection",
+"name": "restaurant2",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "fid": 1, "name": "逃生門密室逃脫", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514995532136567, 25.096546023821276 ] } },
+{ "type": "Feature", "properties": { "fid": 2, "name": "智慧無人超商", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514934384494907, 25.096523527741709 ] } },
+{ "type": "Feature", "properties": { "fid": 3, "name": "雲朵列車", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514698818597779, 25.096657887803339 ] } },
+{ "type": "Feature", "properties": { "fid": 4, "name": "小時光", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514738668042966, 25.096639844101912 ] } },
+{ "type": "Feature", "properties": { "fid": 5, "name": "化石先生", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514662954097105, 25.096719236368287 ] } },
+{ "type": "Feature", "properties": { "fid": 6, "name": "韓風四格拍貼機", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514742652987493, 25.097004326354643 ] } },
+{ "type": "Feature", "properties": { "fid": 7, "name": "逃生門遊戲設計公司", "floor": 1, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.51480242715526, 25.097040413647321 ] } },
+{ "type": "Feature", "properties": { "fid": 8, "name": "統一多拿滋", "floor": 2, "type": null }, "geometry": { "type": "Point", "coordinates": [ 121.51491417234817, 25.097474548385069 ] } },
+{ "type": "Feature", "properties": { "fid": 9, "name": "菓舖", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514932849800374, 25.097501610889587 ] } },
+{ "type": "Feature", "properties": { "fid": 10, "name": "翠茶風", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.51495152725262, 25.097532056200013 ] } },
+{ "type": "Feature", "properties": { "fid": 11, "name": "義品院", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514973940195318, 25.097559118691809 ] } },
+{ "type": "Feature", "properties": { "fid": 12, "name": "四海遊龍", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.515000088628412, 25.09757603274614 ] } },
+{ "type": "Feature", "properties": { "fid": 13, "name": "鴻屋蛋包飯", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514902965876814, 25.097450868688696 ] } },
+{ "type": "Feature", "properties": { "fid": 14, "name": "花蓮扁食", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.51492911430995, 25.097521907764047 ] } },
+{ "type": "Feature", "properties": { "fid": 15, "name": "MR. TANTUNI 突厥", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.51494405627173, 25.097548970258089 ] } },
+{ "type": "Feature", "properties": { "fid": 16, "name": "木槿花韓式食堂", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.51491417234817, 25.097498228076848 ] } },
+{ "type": "Feature", "properties": { "fid": 17, "name": "呀咪食堂", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.51495899823351, 25.097562501502864 ] } },
+{ "type": "Feature", "properties": { "fid": 18, "name": "熊大廚", "floor": 2, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514912704074433, 25.097482740574566 ] } },
+{ "type": "Feature", "properties": { "fid": 19, "name": "統一超商", "floor": 2, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514709699477478, 25.096955013546655 ] } },
+{ "type": "Feature", "properties": { "fid": 20, "name": "豆豆先生工作室", "floor": 2, "type": "商店" }, "geometry": { "type": "Point", "coordinates": [ 121.514700047299812, 25.09691567936207 ] } },
+{ "type": "Feature", "properties": { "fid": 21, "name": "漢堡王", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.5155329558701, 25.098142804601942 ] } },
+{ "type": "Feature", "properties": { "fid": 22, "name": "土耳其冰淇淋", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.515135162905011, 25.098122689990952 ] } },
+{ "type": "Feature", "properties": { "fid": 23, "name": "貓貓小站", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514810063070584, 25.097948972758427 ] } },
+{ "type": "Feature", "properties": { "fid": 24, "name": "葡兒飛", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514628356697202, 25.096870498585005 ] } },
+{ "type": "Feature", "properties": { "fid": 25, "name": "大眼蝦", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514665886092587, 25.09689212624064 ] } },
+{ "type": "Feature", "properties": { "fid": 26, "name": "瓦飛屋", "floor": 3, "type": "餐廳" }, "geometry": { "type": "Point", "coordinates": [ 121.514642003750055, 25.09689212624064 ] } }
+]
+}
