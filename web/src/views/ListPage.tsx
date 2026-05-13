@@ -1,106 +1,308 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, MapPin, ChevronRight, Map as MapIcon, List as ListIcon, Layers, Rocket, Bike, Sparkles, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
+import { Search, SlidersHorizontal, ChevronDown, MapPin, ChevronRight, Layers, Rocket, Bike, Sparkles, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
 import { IMAGES } from '@/src/constants';
+import { loadTownPassPoints } from '@/src/lib/townpass-map-data';
 
 type ListPageProps = {
   initialView?: 'list' | 'map';
 };
 
-export function ListPage({ initialView = 'list' }: ListPageProps) {
-  const [viewMode, setViewMode] = useState<'list' | 'map'>(initialView);
+type Attraction = {
+  id: string;
+  name: string;
+  waitMinutes: number;
+  wait: string;
+  tag: string;
+  restriction: string;
+  area: string;
+  floor: number | null;
+  dist: string;
+  image: string;
+  icon: ComponentType<{ className?: string }>;
+};
 
-  const attractions = [
-    {
-      id: 1,
-      name: '雲霄飛車',
-      wait: '45 分鐘',
-      tag: '驚險刺激',
-      restriction: '120cm',
-      area: '未來世界區',
-      dist: '250m',
-      image: IMAGES.ROLLERCOASTER,
-      icon: Rocket
-    },
-    {
-      id: 2,
-      name: '夢幻旋轉木馬',
-      wait: '5 分鐘',
-      tag: '親子同樂',
-      restriction: '無限制',
-      area: '童話王國區',
-      dist: '100m',
-      image: IMAGES.CAROUSEL,
-      icon: Sparkles
-    },
-    {
-      id: 3,
-      name: '擎天一柱',
-      wait: '60 分鐘',
-      tag: '驚險刺激',
-      restriction: '140cm',
-      area: '冒險之巔',
-      dist: '450m',
-      image: IMAGES.DROP_TOWER,
-      icon: Layers
-    },
-    {
-      id: 4,
-      name: '叢林大探險',
-      wait: '30 分鐘',
-      tag: '水上樂園',
-      restriction: '110cm',
-      area: '熱帶雨林區',
-      dist: '800m',
-      image: IMAGES.RIVER_RAPIDS,
-      icon: Bike
+const fallbackAttractions: Attraction[] = [
+  {
+    id: 'fallback-1',
+    name: '雲霄飛車',
+    waitMinutes: 45,
+    wait: '45 分鐘',
+    tag: '驚險刺激',
+    restriction: '120cm',
+    area: '未來世界區',
+    floor: null,
+    dist: '250m',
+    image: IMAGES.ROLLERCOASTER,
+    icon: Rocket
+  },
+  {
+    id: 'fallback-2',
+    name: '夢幻旋轉木馬',
+    waitMinutes: 5,
+    wait: '5 分鐘',
+    tag: '親子同樂',
+    restriction: '無限制',
+    area: '童話王國區',
+    floor: null,
+    dist: '100m',
+    image: IMAGES.CAROUSEL,
+    icon: Sparkles
+  },
+  {
+    id: 'fallback-3',
+    name: '擎天一柱',
+    waitMinutes: 60,
+    wait: '60 分鐘',
+    tag: '驚險刺激',
+    restriction: '140cm',
+    area: '冒險之巔',
+    floor: null,
+    dist: '450m',
+    image: IMAGES.DROP_TOWER,
+    icon: Layers
+  },
+  {
+    id: 'fallback-4',
+    name: '叢林大探險',
+    waitMinutes: 30,
+    wait: '30 分鐘',
+    tag: '水上樂園',
+    restriction: '110cm',
+    area: '熱帶雨林區',
+    floor: null,
+    dist: '800m',
+    image: IMAGES.RIVER_RAPIDS,
+    icon: Bike
+  }
+];
+
+const attractionImages = [
+  IMAGES.ROLLERCOASTER,
+  IMAGES.CAROUSEL,
+  IMAGES.DROP_TOWER,
+  IMAGES.RIVER_RAPIDS,
+];
+
+const attractionIcons = [Rocket, Sparkles, Layers, Bike];
+
+const sampleWaits = [15, 25, 35, 45, 5];
+
+export function ListPage({ initialView = 'list' }: ListPageProps) {
+  const viewMode = initialView;
+  const [attractions, setAttractions] = useState<Attraction[]>(fallbackAttractions);
+  const [query, setQuery] = useState('');
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFacilities = async () => {
+      try {
+        const { facilityPoints } = await loadTownPassPoints();
+        if (cancelled || facilityPoints.length === 0) {
+          return;
+        }
+
+        setAttractions(
+          facilityPoints.map((point, index) => ({
+            id: point.id,
+            name: point.name,
+            waitMinutes: sampleWaits[index % sampleWaits.length],
+            wait: `${sampleWaits[index % sampleWaits.length]} 分鐘`,
+            tag: point.category,
+            restriction: '無限制',
+            area: typeof point.floor === 'number' ? `${point.floor} 樓` : '園區設施',
+            floor: point.floor ?? null,
+            dist: `${Math.max(80, Math.round(index * 35 + 100))}m`,
+            image: attractionImages[index % attractionImages.length],
+            icon: attractionIcons[index % attractionIcons.length],
+          })),
+        );
+      } catch {
+        if (!cancelled) {
+          setAttractions(fallbackAttractions);
+        }
+      }
+    };
+
+    loadFacilities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categories = useMemo(
+    () => Array.from(new Set(attractions.map((attr) => attr.tag))).filter(Boolean),
+    [attractions],
+  );
+
+  const floors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          attractions
+            .map((attr) => attr.floor)
+            .filter((floor): floor is number => typeof floor === 'number'),
+        ),
+      ).sort((a, b) => a - b),
+    [attractions],
+  );
+
+  const visibleAttractions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const filteredAttractions = attractions.filter((attr) => {
+      const matchesQuery =
+        normalizedQuery.length === 0 ||
+        attr.name.toLowerCase().includes(normalizedQuery) ||
+        attr.tag.toLowerCase().includes(normalizedQuery);
+      const matchesCategory = !selectedCategory || attr.tag === selectedCategory;
+      const matchesFloor = selectedFloor === null || attr.floor === selectedFloor;
+
+      return matchesQuery && matchesCategory && matchesFloor;
+    });
+
+    if (!sortDirection) {
+      return filteredAttractions;
     }
-  ];
+
+    return [...filteredAttractions].sort((a, b) =>
+      sortDirection === 'asc'
+        ? a.waitMinutes - b.waitMinutes
+        : b.waitMinutes - a.waitMinutes,
+    );
+  }, [attractions, query, selectedCategory, selectedFloor, sortDirection]);
+
+  const resetFilters = () => {
+    setQuery('');
+    setSortDirection(null);
+    setSelectedCategory(null);
+    setSelectedFloor(null);
+  };
+
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    sortDirection !== null ||
+    selectedCategory !== null ||
+    selectedFloor !== null;
+
+  const selectClassName = (active: boolean) =>
+    `h-10 appearance-none rounded-full border px-4 pr-9 text-sm font-semibold outline-none transition ${
+      active
+        ? 'border-primary bg-primary text-white shadow-sm'
+        : 'border-grayscale-100 bg-white text-grayscale-700'
+    }`;
 
   return (
     <div className="h-full flex flex-col">
       {/* Header Controls */}
-      <div className="px-4 py-3 space-y-3 bg-surface z-20 shadow-sm border-b border-grayscale-100">
+      <div className="fixed left-0 right-0 top-16 z-40 px-4 py-3 space-y-3 bg-surface shadow-sm border-b border-grayscale-100">
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grayscale-500" />
             <input 
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
               className="w-full h-11 pl-10 pr-4 bg-white border border-grayscale-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" 
               placeholder="搜尋設施或表演..." 
             />
           </div>
-          <button className="w-11 h-11 flex items-center justify-center bg-white border border-grayscale-100 rounded-xl text-primary hover:bg-primary-50 active:scale-95 transition-all">
+          <button
+            onClick={() => setFilterPanelOpen((open) => !open)}
+            className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
+              filterPanelOpen || hasActiveFilters
+                ? 'border-primary bg-primary text-white shadow-sm'
+                : 'border-grayscale-100 bg-white text-primary hover:bg-primary-50'
+            }`}
+            aria-expanded={filterPanelOpen}
+            aria-label="開啟篩選器"
+          >
             <SlidersHorizontal className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          <button className="flex items-center gap-1 px-4 py-2 bg-primary text-white rounded-full whitespace-nowrap text-sm font-semibold shadow-sm">
-            等待時間 (最短) <ChevronDown className="w-4 h-4" />
-          </button>
-          <button className="flex items-center gap-1 px-4 py-2 bg-white border border-grayscale-100 text-grayscale-700 rounded-full whitespace-nowrap text-sm">
-            身高限制 <ChevronDown className="w-4 h-4" />
-          </button>
-          <button className="flex items-center gap-1 px-4 py-2 bg-white border border-grayscale-100 text-grayscale-700 rounded-full whitespace-nowrap text-sm">
-            園區分區 <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
+        {filterPanelOpen && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <label className="relative shrink-0">
+              <select
+                value={sortDirection ?? ''}
+                onChange={(event) =>
+                  setSortDirection(
+                    event.target.value === ''
+                      ? null
+                      : (event.target.value as 'asc' | 'desc'),
+                  )
+                }
+                className={selectClassName(sortDirection !== null)}
+              >
+                <option value="">等待時間</option>
+                <option value="asc">等待時間（最短）</option>
+                <option value="desc">等待時間（最長）</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <label className="relative shrink-0">
+              <select
+                value={selectedCategory ?? ''}
+                onChange={(event) => setSelectedCategory(event.target.value || null)}
+                className={selectClassName(selectedCategory !== null)}
+              >
+                <option value="">設施類型</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <label className="relative shrink-0">
+              <select
+                value={selectedFloor ?? ''}
+                onChange={(event) =>
+                  setSelectedFloor(event.target.value ? Number(event.target.value) : null)
+                }
+                className={selectClassName(selectedFloor !== null)}
+              >
+                <option value="">樓層</option>
+                {floors.map((floor) => (
+                  <option key={floor} value={floor}>
+                    {floor} 樓
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+            </label>
+
+            <button
+              onClick={resetFilters}
+              className="h-10 shrink-0 rounded-full border border-grayscale-100 bg-white px-4 text-sm font-semibold text-grayscale-700 transition active:scale-95 disabled:opacity-40"
+              disabled={!hasActiveFilters}
+            >
+              清除篩選
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 relative overflow-hidden flex flex-col">
-        {/* Toggle View Mode Button */}
-        <button 
-          onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-          className="absolute right-4 top-4 z-30 w-12 h-12 bg-white shadow-lg rounded-full flex items-center justify-center text-primary active:scale-95 border border-grayscale-100"
-        >
-          {viewMode === 'list' ? <MapIcon className="w-6 h-6" /> : <ListIcon className="w-6 h-6" />}
-        </button>
-
         {viewMode === 'list' ? (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar pb-32">
-            {attractions.map((attr) => (
+          <div className={`flex-1 overflow-y-auto px-4 pb-32 space-y-4 no-scrollbar ${filterPanelOpen ? 'pt-40' : 'pt-24'}`}>
+            {visibleAttractions.length === 0 && (
+              <div className="rounded-xl border border-grayscale-100 bg-white p-6 text-center text-sm font-medium text-grayscale-500">
+                找不到符合條件的設施
+              </div>
+            )}
+            {visibleAttractions.map((attr) => (
               <div key={attr.id} className="bg-white border border-grayscale-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
                 <div className="flex flex-col sm:flex-row">
                   <div className="sm:w-32 h-40 sm:h-auto shrink-0 bg-grayscale-100 relative">

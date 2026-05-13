@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Clock, MapPin, Navigation, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import { loadGoogleMapsScript } from "@/src/lib/google-maps-service";
 import {
   loadTownPassPoints,
+  parkBounds,
   parkCenter,
   type TownPassPoint,
 } from "@/src/lib/townpass-map-data";
 
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const googleMapsMapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
 
 type GoogleMapsMap = {
   fitBounds: (bounds: GoogleMapsLatLngBounds, padding?: number) => void;
@@ -16,14 +19,20 @@ type GoogleMapsMap = {
   setZoom: (zoom: number) => void;
 };
 
-type GoogleMapsMarker = {
+type GoogleMapsAdvancedMarker = {
+  addListener: (eventName: string, callback: () => void) => void;
+  map: GoogleMapsMap | null;
+};
+
+type GoogleMapsLegacyMarker = {
   addListener: (eventName: string, callback: () => void) => void;
   setMap: (map: GoogleMapsMap | null) => void;
 };
 
+type GoogleMapsMarker = GoogleMapsAdvancedMarker | GoogleMapsLegacyMarker;
+
 type GoogleMapsInfoWindow = {
-  setContent: (content: string) => void;
-  open: (options: { map: GoogleMapsMap; anchor: GoogleMapsMarker }) => void;
+  close: () => void;
 };
 
 type GoogleMapsLatLngBounds = {
@@ -35,12 +44,12 @@ type GoogleMapsNamespace = {
     element: HTMLElement,
     options: Record<string, unknown>,
   ) => GoogleMapsMap;
-  Marker: new (options: Record<string, unknown>) => GoogleMapsMarker;
+  Marker: new (options: Record<string, unknown>) => GoogleMapsLegacyMarker;
   InfoWindow: new () => GoogleMapsInfoWindow;
   LatLngBounds: new () => GoogleMapsLatLngBounds;
   Size: new (width: number, height: number) => unknown;
-  SymbolPath: {
-    CIRCLE: unknown;
+  marker?: {
+    AdvancedMarkerElement: new (options: Record<string, unknown>) => GoogleMapsAdvancedMarker;
   };
 };
 
@@ -51,62 +60,8 @@ type MapLayerState = {
 
 type MarkerEntry = {
   marker: GoogleMapsMarker;
+  pointId: string;
 };
-
-type LocateResult =
-  | { ok: true; coords: { lat: number; lng: number } }
-  | {
-      ok: false;
-      reason: "not_supported" | "permission_denied" | "insecure_context" | "unavailable";
-    };
-
-const facilityIconUrl = "https://maps.google.com/mapfiles/ms/icons/blue-dot.png";
-const restaurantIconUrl = "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
-
-function locateCurrentPosition(): Promise<LocateResult> {
-  if (!navigator.geolocation) {
-    return Promise.resolve({ ok: false, reason: "not_supported" });
-  }
-
-  if (!window.isSecureContext && window.location.hostname !== "localhost") {
-    return Promise.resolve({ ok: false, reason: "insecure_context" });
-  }
-
-  const tryLocate = (enableHighAccuracy: boolean, timeout: number) =>
-    new Promise<LocateResult>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            ok: true,
-            coords: {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            },
-          });
-        },
-        (error) => {
-          if (error.code === error.PERMISSION_DENIED) {
-            resolve({ ok: false, reason: "permission_denied" });
-            return;
-          }
-          resolve({ ok: false, reason: "unavailable" });
-        },
-        {
-          enableHighAccuracy,
-          timeout,
-          maximumAge: 0,
-        },
-      );
-    });
-
-  return tryLocate(true, 12000).then((result) => {
-    if (result.ok || result.reason === "permission_denied") {
-      return result;
-    }
-    // Retry once with lower accuracy for devices that cannot get GPS fix quickly.
-    return tryLocate(false, 15000);
-  });
-}
 
 function getMapsNamespace(): GoogleMapsNamespace | null {
   const maps = window.google?.maps;
@@ -114,6 +69,81 @@ function getMapsNamespace(): GoogleMapsNamespace | null {
     return null;
   }
   return maps as unknown as GoogleMapsNamespace;
+}
+
+function getPointLabel(pointType: TownPassPoint["pointType"]) {
+  return pointType === "facility" ? "設施" : "餐飲";
+}
+
+function getFloorText(floor?: number | null) {
+  return typeof floor === "number" ? `${floor} 樓` : "樓層未標示";
+}
+
+function createMarkerContent(point: TownPassPoint) {
+  const marker = document.createElement("div");
+  const isFacility = point.pointType === "facility";
+  marker.style.width = "34px";
+  marker.style.height = "34px";
+  marker.style.borderRadius = "9999px";
+  marker.style.background = isFacility ? "#006876" : "#ef4444";
+  marker.style.border = "2px solid white";
+  marker.style.boxShadow = "0 6px 14px rgba(11,13,14,0.22)";
+  marker.style.display = "flex";
+  marker.style.alignItems = "center";
+  marker.style.justifyContent = "center";
+  marker.style.color = "white";
+  marker.style.fontSize = "12px";
+  marker.style.fontWeight = "800";
+  marker.textContent = isFacility ? "設" : "餐";
+  return marker;
+}
+
+function createSelectedMarkerContent(point: TownPassPoint) {
+  const wrapper = document.createElement("div");
+  const isFacility = point.pointType === "facility";
+  const color = isFacility ? "#006876" : "#ef4444";
+  wrapper.style.position = "relative";
+  wrapper.style.width = "54px";
+  wrapper.style.height = "54px";
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "center";
+  wrapper.style.justifyContent = "center";
+
+  const pulse = document.createElement("div");
+  pulse.style.position = "absolute";
+  pulse.style.inset = "0";
+  pulse.style.borderRadius = "9999px";
+  pulse.style.background = color;
+  pulse.style.opacity = "0.18";
+  pulse.style.animation = "townpassMarkerPulse 1.25s ease-out infinite";
+
+  const core = document.createElement("div");
+  core.style.width = "42px";
+  core.style.height = "42px";
+  core.style.borderRadius = "9999px";
+  core.style.background = color;
+  core.style.border = "3px solid white";
+  core.style.boxShadow = "0 10px 24px rgba(11,13,14,0.32)";
+  core.style.display = "flex";
+  core.style.alignItems = "center";
+  core.style.justifyContent = "center";
+  core.style.color = "white";
+  core.style.fontSize = "14px";
+  core.style.fontWeight = "900";
+  core.style.transform = "scale(1.08)";
+  core.textContent = isFacility ? "設" : "餐";
+
+  wrapper.append(pulse, core);
+  return wrapper;
+}
+
+function clearMarker(marker: GoogleMapsMarker) {
+  if ("setMap" in marker) {
+    marker.setMap(null);
+    return;
+  }
+
+  marker.map = null;
 }
 
 export function TownPassMap() {
@@ -132,10 +162,14 @@ export function TownPassMap() {
       ? "地圖初始化中..."
       : "尚未設定 Google Maps API Key，請先填入 web/.env.local。",
   );
+  const [query, setQuery] = useState("");
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<number | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<TownPassPoint | null>(null);
+  const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
-  const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(
-    null,
-  );
+  const [userPosition] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!googleMapsApiKey) {
@@ -152,59 +186,45 @@ export function TownPassMap() {
           return;
         }
 
-        const map = new maps.Map(mapContainerRef.current, {
+        const mapOptions: Record<string, unknown> = {
           center: parkCenter,
-          zoom: 17,
+          zoom: 18,
+          minZoom: 16,
+          maxZoom: 21,
+          restriction: {
+            latLngBounds: parkBounds,
+            strictBounds: true,
+          },
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
           clickableIcons: false,
-        });
+          zoomControl: false,
+        };
+
+        if (googleMapsMapId) {
+          mapOptions.mapId = googleMapsMapId;
+        }
+
+        const map = new maps.Map(mapContainerRef.current, mapOptions);
         mapRef.current = map;
         infoWindowRef.current = new maps.InfoWindow();
 
-        const { allPoints: loadedPoints } = await loadTownPassPoints();
+        let loadedPoints: TownPassPoint[] = [];
+        try {
+          const points = await loadTownPassPoints();
+          loadedPoints = points.allPoints;
+        } catch (error) {
+          console.error("Failed to load map points", error);
+        }
+
         if (cancelled) {
           return;
         }
 
         setAllPoints(loadedPoints);
-        const locateResult = await locateCurrentPosition();
-        if (cancelled) {
-          return;
-        }
-
-        if (locateResult.ok) {
-          setUserPosition(locateResult.coords);
-          setStatusText(
-            `定位成功（${locateResult.coords.lat.toFixed(5)}, ${locateResult.coords.lng.toFixed(5)}），園區資料共 ${loadedPoints.length} 個點位。`,
-          );
-          return;
-        }
-
-        if (locateResult.reason === "permission_denied") {
-          setStatusText(
-            `地圖載入完成，共 ${loadedPoints.length} 個點位。未取得定位權限，請允許瀏覽器位置存取。`,
-          );
-          return;
-        }
-
-        if (locateResult.reason === "not_supported") {
-          setStatusText(
-            `地圖載入完成，共 ${loadedPoints.length} 個點位。此裝置或瀏覽器不支援定位。`,
-          );
-          return;
-        }
-
-        if (locateResult.reason === "insecure_context") {
-          setStatusText(
-            `地圖載入完成，共 ${loadedPoints.length} 個點位。定位需在 HTTPS（或 localhost）環境下使用。`,
-          );
-          return;
-        }
-
         setStatusText(
-          `地圖載入完成，共 ${loadedPoints.length} 個點位。定位失敗，已顯示園區預設範圍。`,
+          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
         );
       } catch {
         if (!cancelled) {
@@ -217,14 +237,65 @@ export function TownPassMap() {
 
     return () => {
       cancelled = true;
-      markersRef.current.forEach((entry) => entry.marker.setMap(null));
+      markersRef.current.forEach((entry) => clearMarker(entry.marker));
       markersRef.current = [];
-      userMarkerRef.current?.setMap(null);
+      if (userMarkerRef.current) {
+        clearMarker(userMarkerRef.current);
+      }
       userMarkerRef.current = null;
       infoWindowRef.current = null;
       mapRef.current = null;
     };
   }, []);
+
+  const categories = useMemo(
+    () => Array.from(new Set(allPoints.map((point) => point.category))).sort(),
+    [allPoints],
+  );
+
+  const floors = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          allPoints
+            .map((point) => point.floor)
+            .filter((floor): floor is number => typeof floor === "number"),
+        ),
+      ).sort((a, b) => a - b),
+    [allPoints],
+  );
+
+  const visiblePoints = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return allPoints.filter((point) => {
+      if (point.pointType === "facility" && !layers.facilities) return false;
+      if (point.pointType === "restaurant" && !layers.restaurants) return false;
+      if (selectedCategory && point.category !== selectedCategory) return false;
+      if (selectedFloor !== null && point.floor !== selectedFloor) return false;
+
+      return (
+        normalizedQuery.length === 0 ||
+        point.name.toLowerCase().includes(normalizedQuery) ||
+        point.category.toLowerCase().includes(normalizedQuery)
+      );
+    });
+  }, [allPoints, layers, query, selectedCategory, selectedFloor]);
+
+  const selectedPointId = selectedPoint?.id ?? null;
+
+  const focusPoint = (point: TownPassPoint) => {
+    const marker = markersRef.current.find((entry) => entry.pointId === point.id)?.marker;
+    if (!mapRef.current || !marker) {
+      return;
+    }
+
+    setSelectedPoint(point);
+    setDetailSheetExpanded(false);
+    mapRef.current.panTo({ lat: point.lat, lng: point.lng });
+    mapRef.current.setZoom(18);
+    infoWindowRef.current?.close();
+  };
 
   useEffect(() => {
     const maps = getMapsNamespace();
@@ -232,138 +303,337 @@ export function TownPassMap() {
       return;
     }
 
-    markersRef.current.forEach((entry) => entry.marker.setMap(null));
+    markersRef.current.forEach((entry) => clearMarker(entry.marker));
     markersRef.current = [];
-
-    const visiblePoints = allPoints.filter((point) => {
-      if (point.pointType === "facility" && !layers.facilities) return false;
-      if (point.pointType === "restaurant" && !layers.restaurants) return false;
-      return true;
-    });
+    const AdvancedMarkerElement = maps.marker?.AdvancedMarkerElement;
+    const canUseAdvancedMarker = Boolean(googleMapsMapId && AdvancedMarkerElement);
 
     const bounds = new maps.LatLngBounds();
 
     visiblePoints.forEach((point) => {
-      const marker = new maps.Marker({
-        position: { lat: point.lat, lng: point.lng },
-        map: mapRef.current,
-        title: point.name,
-        icon: {
-          url: point.pointType === "facility" ? facilityIconUrl : restaurantIconUrl,
-          scaledSize: new maps.Size(34, 34),
-        },
-      });
+      const isSelected = selectedPointId === point.id;
+      const marker =
+        canUseAdvancedMarker && AdvancedMarkerElement
+          ? new AdvancedMarkerElement({
+            position: { lat: point.lat, lng: point.lng },
+            map: mapRef.current,
+            title: point.name,
+            content: isSelected ? createSelectedMarkerContent(point) : createMarkerContent(point),
+          })
+          : new maps.Marker({
+            position: { lat: point.lat, lng: point.lng },
+            map: mapRef.current,
+            title: point.name,
+            icon: {
+              url:
+                isSelected
+                  ? "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
+                  : point.pointType === "facility"
+                  ? "https://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+                  : "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
+              scaledSize: new maps.Size(isSelected ? 46 : 34, isSelected ? 46 : 34),
+            },
+          });
 
       marker.addListener("click", () => {
-        const floorText =
-          typeof point.floor === "number" ? `${point.floor} 樓` : "樓層未標示";
-        const label = point.pointType === "facility" ? "設施" : "餐飲";
-
-        infoWindowRef.current?.setContent(`
-          <div style="min-width:180px;padding:4px 2px;">
-            <div style="font-size:14px;font-weight:700;margin-bottom:4px;">${point.name}</div>
-            <div style="font-size:12px;color:#475259;">類型：${label} / ${point.category}</div>
-            <div style="font-size:12px;color:#475259;">位置：${floorText}</div>
-          </div>
-        `);
-
-        if (mapRef.current && infoWindowRef.current) {
-          infoWindowRef.current.open({
-            map: mapRef.current,
-            anchor: marker,
-          });
-        }
+        setSelectedPoint(point);
+        setDetailSheetExpanded(false);
+        mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
+        mapRef.current?.setZoom(18);
+        infoWindowRef.current?.close();
       });
 
-      markersRef.current.push({ marker });
+      markersRef.current.push({ marker, pointId: point.id });
       bounds.extend({ lat: point.lat, lng: point.lng });
     });
 
-    if (!userPosition && visiblePoints.length > 1) {
+    if (visiblePoints.length > 1) {
       mapRef.current.fitBounds(bounds, 48);
     } else if (!userPosition && visiblePoints.length === 1) {
       mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
       mapRef.current.setZoom(18);
     }
-  }, [allPoints, layers, userPosition]);
-
-  useEffect(() => {
-    const maps = getMapsNamespace();
-    if (!mapRef.current || !maps || !userPosition) {
-      return;
-    }
-
-    mapRef.current.panTo(userPosition);
-    mapRef.current.setZoom(18);
-
-    userMarkerRef.current?.setMap(null);
-    userMarkerRef.current = new maps.Marker({
-      position: userPosition,
-      map: mapRef.current,
-      title: "你的位置",
-      icon: {
-        path: maps.SymbolPath.CIRCLE,
-        scale: 9,
-        fillColor: "#2563eb",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 3,
-      },
-      zIndex: 999,
-    });
-  }, [userPosition]);
+  }, [selectedPointId, userPosition, visiblePoints]);
 
   const summaryText = useMemo(() => {
-    const facilityCount = allPoints.filter((point) => point.pointType === "facility").length;
-    const restaurantCount = allPoints.filter(
+    const facilityCount = visiblePoints.filter((point) => point.pointType === "facility").length;
+    const restaurantCount = visiblePoints.filter(
       (point) => point.pointType === "restaurant",
     ).length;
     return `設施 ${facilityCount} 筆、餐飲 ${restaurantCount} 筆`;
-  }, [allPoints]);
+  }, [visiblePoints]);
+
+  const hasActiveFilters =
+    query.trim().length > 0 ||
+    !layers.facilities ||
+    !layers.restaurants ||
+    selectedCategory !== null ||
+    selectedFloor !== null;
+
+  const resetFilters = () => {
+    setQuery("");
+    setLayers({ facilities: true, restaurants: true });
+    setSelectedCategory(null);
+    setSelectedFloor(null);
+  };
 
   return (
-    <section className="space-y-3">
-      <div className="rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+    <section className="relative h-full overflow-hidden bg-grayscale-50">
+      <style>{`
+        @keyframes townpassMarkerPulse {
+          0% { transform: scale(0.72); opacity: 0.32; }
+          70% { transform: scale(1.35); opacity: 0; }
+          100% { transform: scale(1.35); opacity: 0; }
+        }
+      `}</style>
+      <div
+        ref={mapContainerRef}
+        className="h-full w-full bg-grayscale-50"
+      />
+
+      <div className="absolute left-0 right-0 top-0 z-20 space-y-2 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grayscale-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="h-11 w-full rounded-xl border border-grayscale-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="搜尋設施、餐廳或類型"
+            />
+          </div>
           <button
-            onClick={() =>
-              setLayers((prev) => ({ ...prev, facilities: !prev.facilities }))
-            }
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-              layers.facilities
-                ? "bg-primary text-white"
-                : "bg-grayscale-100 text-grayscale-700"
+            onClick={() => setFilterPanelOpen((open) => !open)}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${
+              filterPanelOpen || hasActiveFilters
+                ? "border-primary bg-primary text-white"
+                : "border-grayscale-100 bg-white text-primary"
             }`}
+            aria-expanded={filterPanelOpen}
+            aria-label="開啟地圖篩選器"
           >
-            設施
+            <SlidersHorizontal className="h-5 w-5" />
           </button>
-          <button
-            onClick={() =>
-              setLayers((prev) => ({ ...prev, restaurants: !prev.restaurants }))
-            }
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-              layers.restaurants
-                ? "bg-red-500 text-white"
-                : "bg-grayscale-100 text-grayscale-700"
-            }`}
-          >
-            餐飲
-          </button>
-          <span className="ml-auto text-xs text-grayscale-500">{summaryText}</span>
         </div>
 
+        {filterPanelOpen && (
+          <div className="space-y-2 rounded-xl border border-grayscale-100 bg-white p-3 shadow-sm">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              <button
+                onClick={() =>
+                  setLayers((prev) => ({ ...prev, facilities: !prev.facilities }))
+                }
+                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
+                  layers.facilities
+                    ? "bg-primary text-white"
+                    : "bg-grayscale-100 text-grayscale-700"
+                }`}
+              >
+                設施
+              </button>
+              <button
+                onClick={() =>
+                  setLayers((prev) => ({ ...prev, restaurants: !prev.restaurants }))
+                }
+                className={`h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition ${
+                  layers.restaurants
+                    ? "bg-red-500 text-white"
+                    : "bg-grayscale-100 text-grayscale-700"
+                }`}
+              >
+                餐飲
+              </button>
+
+              <label className="relative shrink-0">
+                <select
+                  value={selectedCategory ?? ""}
+                  onChange={(event) => setSelectedCategory(event.target.value || null)}
+                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${
+                    selectedCategory
+                      ? "border-primary bg-primary text-white"
+                      : "border-grayscale-100 bg-white text-grayscale-700"
+                  }`}
+                >
+                  <option value="">類型</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+              </label>
+
+              <label className="relative shrink-0">
+                <select
+                  value={selectedFloor ?? ""}
+                  onChange={(event) =>
+                    setSelectedFloor(event.target.value ? Number(event.target.value) : null)
+                  }
+                  className={`h-9 appearance-none rounded-full border px-4 pr-8 text-sm font-semibold outline-none ${
+                    selectedFloor !== null
+                      ? "border-primary bg-primary text-white"
+                      : "border-grayscale-100 bg-white text-grayscale-700"
+                  }`}
+                >
+                  <option value="">樓層</option>
+                  {floors.map((floor) => (
+                    <option key={floor} value={floor}>
+                      {floor} 樓
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-grayscale-500">{summaryText}</span>
+              <button
+                onClick={resetFilters}
+                disabled={!hasActiveFilters}
+                className="text-xs font-semibold text-primary disabled:text-grayscale-300"
+              >
+                清除篩選
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
         <div
-          ref={mapContainerRef}
-          className="h-[420px] w-full rounded-lg border border-grayscale-100 bg-grayscale-50"
-        />
+          className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${
+            detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
+          }`}
+        >
+          {selectedPoint && (
+            <div className="mb-3 flex justify-end">
+              <button
+                onClick={() => {
+                  setSelectedPoint(null);
+                  setDetailSheetExpanded(false);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-grayscale-100 text-grayscale-700"
+                aria-label="關閉已選點位"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {selectedPoint ? (
+            <div className="space-y-4">
+              <button
+                onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
+                className="mx-auto block h-1.5 w-12 rounded-full bg-grayscale-200"
+                aria-label={detailSheetExpanded ? "收合點位詳情" : "展開點位詳情"}
+              />
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary">
+                      {getPointLabel(selectedPoint.pointType)}
+                    </span>
+                    <span className="text-[10px] font-bold text-grayscale-500">
+                      {selectedPoint.category}
+                    </span>
+                  </div>
+                  <h2 className="mt-1 truncate font-display text-lg font-semibold text-grayscale-900">
+                    {selectedPoint.name}
+                  </h2>
+                  <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-grayscale-500">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {getFloorText(selectedPoint.floor)}
+                  </p>
+                </button>
+                <button
+                  onClick={() => focusPoint(selectedPoint)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-white active:scale-95"
+                  aria-label="定位到已選點位"
+                >
+                  <Navigation className="h-5 w-5" />
+                </button>
+              </div>
+
+              {detailSheetExpanded && (
+                <div className="space-y-4 border-t border-grayscale-100 pt-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-grayscale-50 p-3">
+                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
+                        <Tag className="h-4 w-4" />
+                      </div>
+                      <p className="text-[10px] font-bold text-grayscale-500">分類</p>
+                      <p className="mt-1 text-sm font-semibold text-grayscale-900">
+                        {selectedPoint.category}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-grayscale-50 p-3">
+                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
+                        <MapPin className="h-4 w-4" />
+                      </div>
+                      <p className="text-[10px] font-bold text-grayscale-500">位置</p>
+                      <p className="mt-1 text-sm font-semibold text-grayscale-900">
+                        {getFloorText(selectedPoint.floor)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-primary-50 p-4">
+                    <div className="flex items-center gap-2 text-primary">
+                      <Clock className="h-4 w-4" />
+                      <p className="text-sm font-semibold">即時資訊</p>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-grayscale-700">
+                      目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-grayscale-100 p-4">
+                    <p className="text-[10px] font-bold text-grayscale-500">座標</p>
+                    <p className="mt-1 font-mono text-xs text-grayscale-700">
+                      {selectedPoint.lat.toFixed(6)}, {selectedPoint.lng.toFixed(6)}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+              {visiblePoints.slice(0, 12).map((point) => (
+                <button
+                  key={point.id}
+                  onClick={() => focusPoint(point)}
+                  className="min-w-[160px] rounded-lg border border-grayscale-100 bg-white p-2 text-left active:scale-95"
+                >
+                  <div className="mb-1 flex items-center gap-1">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        point.pointType === "facility" ? "bg-primary" : "bg-red-500"
+                      }`}
+                    />
+                    <span className="text-[10px] font-bold text-grayscale-500">
+                      {getPointLabel(point.pointType)}
+                    </span>
+                  </div>
+                  <p className="truncate text-sm font-semibold text-grayscale-900">
+                    {point.name}
+                  </p>
+                  <p className="mt-1 truncate text-[10px] font-medium text-grayscale-500">
+                    {point.category} / {getFloorText(point.floor)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <p className="text-xs text-grayscale-600">{statusText}</p>
-      {userPosition && (
-        <p className="text-[11px] text-grayscale-500">
-          目前定位座標：{userPosition.lat.toFixed(5)}, {userPosition.lng.toFixed(5)}
-        </p>
-      )}
     </section>
   );
 }

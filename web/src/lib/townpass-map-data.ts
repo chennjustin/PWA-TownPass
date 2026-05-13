@@ -38,6 +38,13 @@ export const parkCenter = {
   lng: 121.5151,
 };
 
+export const parkBounds = {
+  north: 25.099,
+  south: 25.0959,
+  east: 121.5169,
+  west: 121.51355,
+};
+
 export async function loadTownPassPoints() {
   const [facilityPoints, restaurantPoints] = await Promise.all([
     fetchPointsFromGeoJson(FACILITY_GEOJSON_URL, "facility"),
