@@ -4,7 +4,7 @@ import { IMAGES } from '@/src/constants';
 
 export function HomePage() {
   return (
-    <div className="pt-14 px-4 space-y-6">
+    <div className="pt-16 px-4 space-y-6">
       {/* Banner */}
       <section className="mt-4">
         <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-sm">
