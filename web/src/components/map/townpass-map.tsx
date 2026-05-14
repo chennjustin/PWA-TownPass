@@ -46,11 +46,15 @@ type GoogleMapsMap = {
   fitBounds: (bounds: GoogleMapsLatLngBounds, padding?: number) => void;
   panTo: (position: { lat: number; lng: number }) => void;
   setZoom: (zoom: number) => void;
+  getZoom?: () => number;
+  /** 同時設定中心與縮放，動畫通常比「先 pan 再 zoom」一氣呵成 */
+  setOptions?: (options: { zoom?: number; center?: { lat: number; lng: number } }) => void;
 };
 
 type GoogleMapsLegacyMarker = {
   addListener: (eventName: string, callback: () => void) => void;
   setMap: (map: GoogleMapsMap | null) => void;
+  getMap?: () => GoogleMapsMap | null | undefined;
   setIcon: (icon: GoogleMapsMarkerIcon) => void;
   setZIndex: (zIndex: number) => void;
 };
@@ -107,6 +111,9 @@ const MAP_MIN_ZOOM = 10;
 const MAP_MAX_ZOOM = 22;
 const MARKER_CLUSTER_MAX_ZOOM = 18;
 const MARKER_CLUSTER_RADIUS = 64;
+/** 點選設施／輪播焦點時拉近到此倍率，讓單一設施清楚可見 */
+const FACILITY_FOCUS_ZOOM = 20;
+const DETAIL_SHEET_COLLAPSE_MS = 320;
 
 
 
@@ -273,14 +280,120 @@ function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: Goog
   };
 }
 
+function scheduleMapIdleCallback(map: object, callback: () => void) {
+  type MapsEvent = { addListenerOnce?: (target: object, eventName: string, handler: () => void) => void };
+  const mapsBundle = window.google?.maps as { event?: MapsEvent } | undefined;
+  const eventApi = mapsBundle?.event;
+  if (eventApi?.addListenerOnce) {
+    eventApi.addListenerOnce(map, "idle", callback);
+  } else {
+    window.setTimeout(callback, 150);
+  }
+}
+
+/** 僅平移到點位（不改變縮放） */
+function centerMapOnPoint(map: GoogleMapsMap, point: { lat: number; lng: number }) {
+  map.panTo({ lat: point.lat, lng: point.lng });
+}
+
+/**
+ * 輪播／箭頭／地圖上的單一標記：先平移；若該標記仍被 MarkerClusterer 收進數字裡（getMap 為空），再 zoom 拆叢集。
+ * 點底部卡片開詳情請用 focusMapOnPointAfterCardClick（先 zoom 再 pan）。
+ */
+function focusPointMapWithClusterAwareZoom(
+  map: GoogleMapsMap,
+  point: { lat: number; lng: number },
+  marker?: GoogleMapsLegacyMarker | null,
+) {
+  centerMapOnPoint(map, point);
+  if (marker == null) {
+    return;
+  }
+  scheduleMapIdleCallback(map as object, () => {
+    const attached = marker.getMap?.();
+    if (attached == null) {
+      focusMapOnPoint(map, point);
+    }
+  });
+}
+
+/** 同時移動中心與縮放，優先使用 setOptions 單次更新相機（動畫較順） */
+function setMapCenterAndZoom(
+  map: GoogleMapsMap,
+  center: { lat: number; lng: number },
+  zoom: number,
+) {
+  if (typeof map.setOptions === "function") {
+    map.setOptions({ center, zoom });
+    return;
+  }
+  map.panTo(center);
+  map.setZoom(zoom);
+}
+
+/** 以平移為主；需改變縮放時與 center 一併套用，避免先移再拉的兩段感 */
+function focusMapOnPoint(map: GoogleMapsMap, point: { lat: number; lng: number }) {
+  const targetZoom = Math.min(FACILITY_FOCUS_ZOOM, MAP_MAX_ZOOM);
+  const center = { lat: point.lat, lng: point.lng };
+
+  const currentZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
+  if (typeof currentZoom === "number" && Math.abs(currentZoom - targetZoom) <= 0.4) {
+    map.panTo(center);
+    return;
+  }
+
+  setMapCenterAndZoom(map, center, targetZoom);
+}
+
+/** 點底部卡片開詳情：先 setZoom，idle 後再 panTo 對準該點 */
+function focusMapOnPointAfterCardClick(map: GoogleMapsMap, point: { lat: number; lng: number }) {
+  const targetZoom = Math.min(FACILITY_FOCUS_ZOOM, MAP_MAX_ZOOM);
+  const center = { lat: point.lat, lng: point.lng };
+
+  const currentZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
+  if (typeof currentZoom === "number" && Math.abs(currentZoom - targetZoom) <= 0.4) {
+    map.panTo(center);
+    return;
+  }
+
+  map.setZoom(targetZoom);
+  scheduleMapIdleCallback(map as object, () => {
+    map.panTo(center);
+  });
+}
+
+function getCarouselSlideStride(container: HTMLDivElement) {
+  const first = container.firstElementChild as HTMLElement | null;
+  if (!first) {
+    return Math.max(1, container.clientWidth);
+  }
+  const styles = window.getComputedStyle(container);
+  const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
+  return first.offsetWidth + gap;
+}
+
+function getCarouselIndexFromScroll(container: HTMLDivElement, slideCount: number) {
+  const maxIdx = Math.max(0, slideCount - 1);
+  const stride = getCarouselSlideStride(container);
+  if (stride <= 0) {
+    return 0;
+  }
+  const index = Math.round(container.scrollLeft / stride);
+  return Math.min(maxIdx, Math.max(0, index));
+}
+
 export function TownPassMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapCarouselRef = useRef<HTMLDivElement | null>(null);
+  /** 與本次使用者操作對應的點位 id，用於略過 marker effect 內重複的相機更新（避免打斷 pan 動畫） */
+  const pendingMapFocusPointIdRef = useRef<string | null>(null);
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
   const userMarkerRef = useRef<GoogleMapsLegacyMarker | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  /** 點數字叢集後略過一次「無輪播焦點時 fitBounds」，避免抵銷 zoom，也不要讓地圖誤以為焦點是第一筆 visible */
+  const skipNextFitBoundsAfterClusterRef = useRef(false);
 
   const [layers, setLayers] = useState<MapLayerState>({
     facilities: true,
@@ -492,15 +605,60 @@ export function TownPassMap() {
   const selectedPointId = selectedPoint?.id ?? null;
 
   const focusPoint = (point: TownPassPoint) => {
-    const marker = markersRef.current.find((entry) => entry.pointId === point.id)?.marker;
-    if (!mapRef.current || !marker) {
+    if (!mapRef.current) {
       return;
+    }
+
+    pendingMapFocusPointIdRef.current = point.id;
+    setActiveCarouselPointId(point.id);
+    const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
+    if (pointIndex !== -1) {
+      const container = mapCarouselRef.current;
+      if (container) {
+        const stride = getCarouselSlideStride(container);
+        container.scrollTo({
+          left: pointIndex * stride,
+          behavior: "smooth",
+        });
+      }
     }
 
     setSelectedPoint(point);
     setDetailSheetExpanded(true);
-    mapRef.current.panTo({ lat: point.lat, lng: point.lng });
+    focusMapOnPointAfterCardClick(mapRef.current, point);
     infoWindowRef.current?.close();
+  };
+
+  const closeSelectedPointToCarousel = () => {
+    const point = selectedPoint;
+    if (!point || !mapRef.current) {
+      return;
+    }
+
+    pendingMapFocusPointIdRef.current = point.id;
+    setDetailSheetExpanded(false);
+    setActiveCarouselPointId(point.id);
+
+    const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
+    if (pointIndex !== -1) {
+      const container = mapCarouselRef.current;
+      if (container) {
+        window.requestAnimationFrame(() => {
+          const stride = getCarouselSlideStride(container);
+          container.scrollTo({
+            left: pointIndex * stride,
+            behavior: "smooth",
+          });
+        });
+      }
+    }
+
+    const markerEntry = markersRef.current.find((e) => e.pointId === point.id);
+    focusPointMapWithClusterAwareZoom(mapRef.current, point, markerEntry?.marker);
+
+    window.setTimeout(() => {
+      setSelectedPoint(null);
+    }, DETAIL_SHEET_COLLAPSE_MS);
   };
 
   const carouselIndex = useMemo(() => {
@@ -516,10 +674,18 @@ export function TownPassMap() {
     if (!container || visiblePoints.length === 0) {
       return;
     }
-    const pageWidth = container.offsetWidth;
-    const current = Math.round(container.scrollLeft / pageWidth);
-    const next = Math.max(0, Math.min(visiblePoints.length - 1, current + delta));
-    container.scrollTo({ left: next * pageWidth, behavior: "smooth" });
+    const slideCount = visiblePoints.length;
+    const current = getCarouselIndexFromScroll(container, slideCount);
+    const next = Math.max(0, Math.min(slideCount - 1, current + delta));
+    const nextPoint = visiblePoints[next];
+    const stride = getCarouselSlideStride(container);
+    pendingMapFocusPointIdRef.current = nextPoint.id;
+    setActiveCarouselPointId(nextPoint.id);
+    if (mapRef.current) {
+      const markerEntry = markersRef.current.find((e) => e.pointId === nextPoint.id);
+      focusPointMapWithClusterAwareZoom(mapRef.current, nextPoint, markerEntry?.marker);
+    }
+    container.scrollTo({ left: next * stride, behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -547,13 +713,18 @@ export function TownPassMap() {
 
       marker.addListener("click", () => {
         setSelectedPoint(null); // 確保回到簡短資訊 (carousel)
-        mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
+        setActiveCarouselPointId(point.id);
+        if (mapRef.current) {
+          pendingMapFocusPointIdRef.current = point.id;
+          centerMapOnPoint(mapRef.current, point);
+        }
         const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
         if (pointIndex !== -1) {
           const container = mapCarouselRef.current;
           if (container) {
+            const stride = getCarouselSlideStride(container);
             container.scrollTo({
-              left: pointIndex * container.offsetWidth,
+              left: pointIndex * stride,
               behavior: "auto", // 使用 auto 取代 smooth，即可瞬間跳轉，不會有經過其他設施的動畫
             });
           }
@@ -588,19 +759,24 @@ export function TownPassMap() {
         map: mapRef.current as unknown as MarkerClustererMap,
         renderer,
         onClusterClick: (_event, cluster, map) => {
+          skipNextFitBoundsAfterClusterRef.current = true;
           setSelectedPoint(null);
           setActiveCarouselPointId(null);
 
+          const currentZoom = map.getZoom() ?? MARKER_CLUSTER_MAX_ZOOM;
+          /** 至少拉過演算法 maxZoom，才能把數字叢集拆成單一標記 */
           const targetZoom = Math.min(
-            (map.getZoom() ?? MARKER_CLUSTER_MAX_ZOOM) + 2,
+            Math.max(currentZoom + 2, MARKER_CLUSTER_MAX_ZOOM + 1),
             MAP_MAX_ZOOM,
           );
 
-          map.setZoom(targetZoom);
-          map.panTo(cluster.position);
-          window.setTimeout(() => {
-            map.panTo(cluster.position);
-          }, 0);
+          const pos = cluster.position as {
+            lat?: number | (() => number);
+            lng?: number | (() => number);
+          };
+          const lat = typeof pos.lat === "function" ? pos.lat() : Number(pos.lat);
+          const lng = typeof pos.lng === "function" ? pos.lng() : Number(pos.lng);
+          setMapCenterAndZoom(map as unknown as GoogleMapsMap, { lat, lng }, targetZoom);
         },
         algorithm: new SuperClusterAlgorithm({
           maxZoom: MARKER_CLUSTER_MAX_ZOOM,
@@ -618,25 +794,52 @@ export function TownPassMap() {
       : null;
 
     if (focusedPoint) {
-      mapRef.current.panTo({ lat: focusedPoint.lat, lng: focusedPoint.lng });
+      if (pendingMapFocusPointIdRef.current === focusedPoint.id) {
+        pendingMapFocusPointIdRef.current = null;
+      } else {
+        focusMapOnPoint(mapRef.current, focusedPoint);
+      }
     } else if (visiblePoints.length > 1) {
-      mapRef.current.fitBounds(bounds, 48);
+      const carouselPoint = activeCarouselPointId
+        ? visiblePoints.find((p) => p.id === activeCarouselPointId)
+        : null;
+      if (carouselPoint) {
+        if (pendingMapFocusPointIdRef.current === carouselPoint.id) {
+          pendingMapFocusPointIdRef.current = null;
+        } else {
+          const markerEntry = markersRef.current.find((e) => e.pointId === carouselPoint.id);
+          focusPointMapWithClusterAwareZoom(
+            mapRef.current,
+            carouselPoint,
+            markerEntry?.marker,
+          );
+        }
+      } else {
+        if (skipNextFitBoundsAfterClusterRef.current) {
+          skipNextFitBoundsAfterClusterRef.current = false;
+        } else {
+          mapRef.current.fitBounds(bounds, 48);
+        }
+      }
     } else if (!userPosition && visiblePoints.length === 1) {
-      mapRef.current.panTo({ lat: visiblePoints[0].lat, lng: visiblePoints[0].lng });
-      mapRef.current.setZoom(18);
+      setMapCenterAndZoom(mapRef.current, {
+        lat: visiblePoints[0].lat,
+        lng: visiblePoints[0].lng,
+      }, 18);
     }
-  }, [selectedPointId, userPosition, visiblePoints]);
+  }, [activeCarouselPointId, selectedPointId, userPosition, visiblePoints]);
 
   useEffect(() => {
     const maps = getMapsNamespace();
     if (!maps) return;
 
-    const actualActiveId = selectedPointId ?? activeCarouselPointId ?? visiblePoints[0]?.id ?? null;
+    /** 不要用 visiblePoints[0] 當預設焦點：點數字叢集時會清空輪播 id，否則會誤亮清單第一筆（例如 K2） */
+    const mapHighlightPointId = selectedPointId ?? activeCarouselPointId ?? null;
 
     markersRef.current.forEach((entry) => {
       const point = visiblePoints.find((p) => p.id === entry.pointId);
       if (point) {
-        const isSelected = point.id === actualActiveId;
+        const isSelected = point.id === mapHighlightPointId;
         entry.marker.setIcon(createMapMarkerIcon(point, isSelected, maps));
         entry.marker.setZIndex(isSelected ? 1000 : 1);
       }
@@ -850,10 +1053,7 @@ export function TownPassMap() {
                   aria-label={detailSheetExpanded ? "收合點位詳情" : "展開點位詳情"}
                 />
                 <button
-                  onClick={() => {
-                    setSelectedPoint(null);
-                    setDetailSheetExpanded(false);
-                  }}
+                  onClick={closeSelectedPointToCarousel}
                   className="absolute right-0 flex h-7 w-7 items-center justify-center rounded-full bg-grayscale-100 text-grayscale-500 transition-transform active:scale-95"
                   aria-label="關閉已選點位"
                 >
@@ -890,78 +1090,87 @@ export function TownPassMap() {
                 </button>
               </div>
 
-              {detailSheetExpanded && (
-                <div className="space-y-4 border-t border-grayscale-100 pt-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-grayscale-50 p-3">
-                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
-                        <Tag className="h-4 w-4" />
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${detailSheetExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div
+                    className={`space-y-4 border-t border-grayscale-100 pt-4 ${detailSheetExpanded ? "" : "pointer-events-none"
+                      }`}
+                    aria-hidden={!detailSheetExpanded}
+                  >
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-grayscale-50 p-3">
+                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
+                          <Tag className="h-4 w-4" />
+                        </div>
+                        <p className="text-[10px] font-bold text-grayscale-500">分類</p>
+                        <p className="mt-1 text-sm font-semibold text-grayscale-900">
+                          {selectedPlaceDetail?.category ?? selectedPoint.category}
+                        </p>
                       </div>
-                      <p className="text-[10px] font-bold text-grayscale-500">分類</p>
-                      <p className="mt-1 text-sm font-semibold text-grayscale-900">
-                        {selectedPlaceDetail?.category ?? selectedPoint.category}
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-grayscale-50 p-3">
-                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
-                        <MapPin className="h-4 w-4" />
+                      <div className="rounded-xl bg-grayscale-50 p-3">
+                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
+                          <MapPin className="h-4 w-4" />
+                        </div>
+                        <p className="text-[10px] font-bold text-grayscale-500">位置</p>
+                        <p className="mt-1 text-sm font-semibold text-grayscale-900">
+                          {getFloorText(selectedPoint.floor)}
+                        </p>
                       </div>
-                      <p className="text-[10px] font-bold text-grayscale-500">位置</p>
-                      <p className="mt-1 text-sm font-semibold text-grayscale-900">
-                        {getFloorText(selectedPoint.floor)}
-                      </p>
                     </div>
-                  </div>
 
-                  {selectedWaitMinutes !== null && (
+                    {selectedWaitMinutes !== null && (
+                      <div className="rounded-xl bg-primary-50 p-4">
+                        <div className="flex items-center gap-2 text-primary">
+                          <Clock className="h-4 w-4" />
+                          <p className="text-sm font-semibold">
+                            {selectedOperatingStatus.isOpen ? "目前等待時間" : "營業狀態"}
+                          </p>
+                        </div>
+                        <p className="mt-2 font-display text-2xl font-semibold text-grayscale-900">
+                          {selectedOperatingStatus.isOpen
+                            ? `${selectedWaitMinutes} 分鐘`
+                            : selectedOperatingStatus.label}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-grayscale-500">
+                          {selectedOperatingStatus.hours}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="rounded-xl bg-primary-50 p-4">
                       <div className="flex items-center gap-2 text-primary">
                         <Clock className="h-4 w-4" />
                         <p className="text-sm font-semibold">
-                          {selectedOperatingStatus.isOpen ? "目前等待時間" : "營業狀態"}
+                          {selectedPlaceDetail ? "設施介紹" : "即時資訊"}
                         </p>
                       </div>
-                      <p className="mt-2 font-display text-2xl font-semibold text-grayscale-900">
-                        {selectedOperatingStatus.isOpen
-                          ? `${selectedWaitMinutes} 分鐘`
-                          : selectedOperatingStatus.label}
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-grayscale-500">
-                        {selectedOperatingStatus.hours}
+                      <p className="mt-2 text-sm leading-6 text-grayscale-700">
+                        {selectedPlaceDetail?.description ??
+                          "目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。"}
                       </p>
                     </div>
-                  )}
 
-                  <div className="rounded-xl bg-primary-50 p-4">
-                    <div className="flex items-center gap-2 text-primary">
-                      <Clock className="h-4 w-4" />
-                      <p className="text-sm font-semibold">
-                        {selectedPlaceDetail ? "設施介紹" : "即時資訊"}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-grayscale-700">
-                      {selectedPlaceDetail?.description ??
-                        "目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。"}
-                    </p>
-                  </div>
-
-                  {selectedFilterTags.length > 0 && (
-                    <div className="rounded-xl border border-grayscale-100 p-4">
-                      <p className="text-[10px] font-bold text-grayscale-500">篩選標籤</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {selectedFilterTags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-grayscale-100 px-3 py-1 text-xs font-semibold text-grayscale-700"
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                    {selectedFilterTags.length > 0 && (
+                      <div className="rounded-xl border border-grayscale-100 p-4">
+                        <p className="text-[10px] font-bold text-grayscale-500">篩選標籤</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {selectedFilterTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-grayscale-100 px-3 py-1 text-xs font-semibold text-grayscale-700"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-0.5">
@@ -969,7 +1178,7 @@ export function TownPassMap() {
                 type="button"
                 onClick={() => scrollCarouselBy(-1)}
                 disabled={visiblePoints.length <= 1 || carouselIndex <= 0}
-                className="flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
+                className="relative z-10 flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
                 aria-label="上一個點位"
               >
                 <ChevronLeft className="h-5 w-5" strokeWidth={1.5} aria-hidden />
@@ -980,12 +1189,21 @@ export function TownPassMap() {
                 className="flex min-w-0 flex-1 gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory"
                 onScroll={(e) => {
                   const container = e.currentTarget;
-                  const index = Math.round(container.scrollLeft / container.offsetWidth);
+                  if (visiblePoints.length === 0) {
+                    return;
+                  }
+                  const index = getCarouselIndexFromScroll(container, visiblePoints.length);
                   const activePoint = visiblePoints[index];
                   if (activePoint && container.dataset.activeIndex !== String(index)) {
                     container.dataset.activeIndex = String(index);
                     if (mapRef.current) {
-                      mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+                      pendingMapFocusPointIdRef.current = activePoint.id;
+                      const markerEntry = markersRef.current.find((e) => e.pointId === activePoint.id);
+                      focusPointMapWithClusterAwareZoom(
+                        mapRef.current,
+                        activePoint,
+                        markerEntry?.marker,
+                      );
                     }
                     setActiveCarouselPointId(activePoint.id);
                   }
@@ -1021,7 +1239,7 @@ export function TownPassMap() {
                 type="button"
                 onClick={() => scrollCarouselBy(1)}
                 disabled={visiblePoints.length <= 1 || carouselIndex >= visiblePoints.length - 1}
-                className="flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
+                className="relative z-10 flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
                 aria-label="下一個點位"
               >
                 <ChevronRight className="h-5 w-5" strokeWidth={1.5} aria-hidden />
