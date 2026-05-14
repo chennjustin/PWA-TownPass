@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Clock,
   FerrisWheel,
   MapPin,
@@ -273,6 +275,7 @@ function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: Goog
 
 export function TownPassMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapCarouselRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
@@ -500,6 +503,25 @@ export function TownPassMap() {
     infoWindowRef.current?.close();
   };
 
+  const carouselIndex = useMemo(() => {
+    if (!activeCarouselPointId) {
+      return 0;
+    }
+    const index = visiblePoints.findIndex((p) => p.id === activeCarouselPointId);
+    return index === -1 ? 0 : index;
+  }, [activeCarouselPointId, visiblePoints]);
+
+  const scrollCarouselBy = (delta: number) => {
+    const container = mapCarouselRef.current;
+    if (!container || visiblePoints.length === 0) {
+      return;
+    }
+    const pageWidth = container.offsetWidth;
+    const current = Math.round(container.scrollLeft / pageWidth);
+    const next = Math.max(0, Math.min(visiblePoints.length - 1, current + delta));
+    container.scrollTo({ left: next * pageWidth, behavior: "smooth" });
+  };
+
   useEffect(() => {
     const maps = getMapsNamespace();
     if (!mapRef.current || !maps) {
@@ -528,7 +550,7 @@ export function TownPassMap() {
         mapRef.current?.panTo({ lat: point.lat, lng: point.lng });
         const pointIndex = visiblePoints.findIndex((p) => p.id === point.id);
         if (pointIndex !== -1) {
-          const container = document.getElementById("map-carousel-container");
+          const container = mapCarouselRef.current;
           if (container) {
             container.scrollTo({
               left: pointIndex * container.offsetWidth,
@@ -942,47 +964,68 @@ export function TownPassMap() {
               )}
             </div>
           ) : (
-            <div 
-              id="map-carousel-container"
-              className="flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory"
-              onScroll={(e) => {
-                const container = e.currentTarget;
-                const index = Math.round(container.scrollLeft / container.offsetWidth);
-                const activePoint = visiblePoints[index];
-                if (activePoint && container.dataset.activeIndex !== String(index)) {
-                  container.dataset.activeIndex = String(index);
-                  if (mapRef.current) {
-                    mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => scrollCarouselBy(-1)}
+                disabled={visiblePoints.length <= 1 || carouselIndex <= 0}
+                className="flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
+                aria-label="上一個點位"
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={1.5} aria-hidden />
+              </button>
+              <div
+                ref={mapCarouselRef}
+                id="map-carousel-container"
+                className="flex min-w-0 flex-1 gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory"
+                onScroll={(e) => {
+                  const container = e.currentTarget;
+                  const index = Math.round(container.scrollLeft / container.offsetWidth);
+                  const activePoint = visiblePoints[index];
+                  if (activePoint && container.dataset.activeIndex !== String(index)) {
+                    container.dataset.activeIndex = String(index);
+                    if (mapRef.current) {
+                      mapRef.current.panTo({ lat: activePoint.lat, lng: activePoint.lng });
+                    }
+                    setActiveCarouselPointId(activePoint.id);
                   }
-                  setActiveCarouselPointId(activePoint.id);
-                }
-              }}
-            >
-              {visiblePoints.map((point) => (
-                <button
-                  key={point.id}
-                  onClick={() => focusPoint(point)}
-                  className="w-full min-w-full shrink-0 snap-center rounded-lg border border-grayscale-100 bg-white p-3 text-left active:scale-95"
-                >
-                  <div className="mb-2 flex items-center gap-1.5">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
-                        }`}
-                    />
-                    <span className="text-[11px] font-bold text-grayscale-500">
-                      {getPointLabel(point.pointType)}
-                    </span>
-                  </div>
-                  <p className="truncate text-base font-semibold text-grayscale-900">
-                    {point.name}
-                  </p>
-                  <p className="mt-1 truncate text-xs font-medium text-grayscale-500">
-                    {point.pointType === "facility"
-                      ? `等待 ${getFacilityWaitMinutes(point)} 分鐘`
-                      : point.category}
-                  </p>
-                </button>
-              ))}
+                }}
+              >
+                {visiblePoints.map((point) => (
+                  <button
+                    key={point.id}
+                    onClick={() => focusPoint(point)}
+                    className="w-full min-w-full shrink-0 snap-center rounded-lg border border-grayscale-100 bg-white p-3 text-left active:scale-95"
+                  >
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
+                          }`}
+                      />
+                      <span className="text-[11px] font-bold text-grayscale-500">
+                        {getPointLabel(point.pointType)}
+                      </span>
+                    </div>
+                    <p className="truncate text-base font-semibold text-grayscale-900">
+                      {point.name}
+                    </p>
+                    <p className="mt-1 truncate text-xs font-medium text-grayscale-500">
+                      {point.pointType === "facility"
+                        ? `等待 ${getFacilityWaitMinutes(point)} 分鐘`
+                        : point.category}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => scrollCarouselBy(1)}
+                disabled={visiblePoints.length <= 1 || carouselIndex >= visiblePoints.length - 1}
+                className="flex h-12 w-7 shrink-0 touch-manipulation items-center justify-center rounded-full border-0 bg-transparent text-grayscale-400 transition hover:text-grayscale-500 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
+                aria-label="下一個點位"
+              >
+                <ChevronRight className="h-5 w-5" strokeWidth={1.5} aria-hidden />
+              </button>
             </div>
           )}
         </div>
