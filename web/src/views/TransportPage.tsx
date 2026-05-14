@@ -41,16 +41,17 @@ export function TransportPage() {
         </div>
       </div>
 
-      <div className="space-y-4 px-4 pt-4">
-        <section className="space-y-3 rounded-xl border border-grayscale-100 p-4">
+      <div className="space-y-5 px-4 pt-4">
+        
+        <section className="space-y-4 border-b border-grayscale-100 pb-4">
           <div className="flex items-center gap-2">
             <Bus className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-on-surface">一、大眾運輸</h3>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-lg bg-grayscale-50 p-3">
             <h4 className="text-sm font-semibold text-grayscale-900">捷運轉乘公車</h4>
-            <ul className="space-y-1 text-sm leading-relaxed text-grayscale-700">
+            <ul className="space-y-1.5 text-sm leading-relaxed text-grayscale-700">
               {metroBusRoutes.map((item) => (
                 <li key={item}>• {item}</li>
               ))}
@@ -59,7 +60,7 @@ export function TransportPage() {
 
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-grayscale-900">捷運轉乘公共自行車（YouBike）</h4>
-            <ul className="space-y-1 text-sm leading-relaxed text-grayscale-700">
+            <ul className="space-y-1.5 text-sm leading-relaxed text-grayscale-700">
               {bikeRoutes.map((item) => (
                 <li key={item}>• {item}</li>
               ))}
@@ -68,53 +69,66 @@ export function TransportPage() {
 
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-grayscale-900">步行</h4>
-            <ul className="space-y-1 text-sm leading-relaxed text-grayscale-700">
+            <ul className="space-y-1.5 text-sm leading-relaxed text-grayscale-700">
               {walkingRoutes.map((item) => (
                 <li key={item}>• {item}</li>
               ))}
             </ul>
           </div>
 
-          <div className="space-y-2">
+          <div className="rounded-lg border border-grayscale-100 p-3">
             <h4 className="text-sm font-semibold text-grayscale-900">高鐵、臺鐵</h4>
-            <p className="text-sm leading-relaxed text-grayscale-700">
+            <p className="mt-1 text-sm leading-relaxed text-grayscale-700">
               • 搭乘至臺北車站，轉捷運淡水信義線至劍潭站、士林站或芝山站，再轉乘公車。
             </p>
           </div>
         </section>
 
-        <section className="space-y-3 rounded-xl border border-grayscale-100 p-4">
+        <section className="space-y-3 border-b border-grayscale-100 pb-4">
           <div className="flex items-center gap-2">
             <Car className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-on-surface">二、開車資訊</h3>
           </div>
 
-          <ul className="space-y-1 text-sm leading-relaxed text-grayscale-700">
+          <ul className="space-y-1.5 text-sm leading-relaxed text-grayscale-700">
             {drivingRoutes.map((item) => (
               <li key={item}>• {item}</li>
             ))}
           </ul>
 
-          <p className="inline-flex items-center gap-1 text-sm font-semibold text-grayscale-800">
+          <p className="inline-flex items-center gap-1 rounded-full bg-grayscale-100 px-3 py-1 text-sm font-semibold text-grayscale-800">
             <Navigation className="h-4 w-4 text-primary" />
             GPS 座標：東經 121°30&apos;54.5&apos;&apos;、北緯 25°05&apos;48&apos;&apos;
           </p>
         </section>
 
-        <section className="space-y-3 rounded-xl border border-grayscale-100 p-4">
+        <section className="space-y-3">
           <div className="flex items-center gap-2">
             <ParkingCircle className="h-4 w-4 text-primary" />
             <h3 className="font-semibold text-on-surface">三、停車場資訊</h3>
           </div>
 
-          <div className="space-y-1 text-sm leading-relaxed text-grayscale-700">
-            <p>（一）位置：請由園區北側文林路 587 巷出入口進入。</p>
-            <p>（二）車格數：汽車 442 格（含身障 12 格）、機車 393 格（含身障 8 格）。</p>
-            <p>（三）限高：2.1 公尺。</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+              <p className="text-[11px] text-grayscale-500">汽車車格</p>
+              <p className="text-sm font-semibold text-grayscale-900">442</p>
+            </div>
+            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+              <p className="text-[11px] text-grayscale-500">機車車格</p>
+              <p className="text-sm font-semibold text-grayscale-900">393</p>
+            </div>
+            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+              <p className="text-[11px] text-grayscale-500">限高</p>
+              <p className="text-sm font-semibold text-grayscale-900">2.1m</p>
+            </div>
+          </div>
+
+          <div className="text-sm leading-relaxed text-grayscale-700">
+            <p>位置：請由園區北側文林路 587 巷出入口進入。</p>
           </div>
 
           <div className="space-y-2 text-sm leading-relaxed text-grayscale-700">
-            <h4 className="font-semibold text-grayscale-900">（四）收費標準</h4>
+            <h4 className="font-semibold text-grayscale-900">收費標準</h4>
             <p>• 汽車：平日 30 元/時、假日 40 元/時（8:00-20:00）；夜間 10 元/時（20:00-翌日 8:00）。</p>
             <p>• 機車：20 元/次，隔日另計。</p>
             <p>• 收費以 30 分鐘為單位，未滿 30 分鐘以 30 分鐘計。</p>
@@ -124,7 +138,7 @@ export function TransportPage() {
           </div>
 
           <div className="space-y-2 text-sm leading-relaxed text-grayscale-700">
-            <h4 className="font-semibold text-grayscale-900">（五）月票資訊</h4>
+            <h4 className="font-semibold text-grayscale-900">月票資訊</h4>
             <p>• 提供汽車限時夜間月票與機車全時月票；里民優惠依現場公告。</p>
             <p>• 申請請備妥身分與車輛證件正本至汽車管理室辦理。</p>
             <p>• 月票時間：汽車 17:30-翌日 9:00；機車 24 小時。</p>
@@ -132,7 +146,7 @@ export function TransportPage() {
           </div>
 
           <div className="rounded-lg bg-grayscale-50 p-3 text-sm text-grayscale-700">
-            （六）停車場管理室 / 24 小時客服：<span className="font-semibold">(02) 2834-5378</span>
+            停車場管理室 / 24 小時客服：<span className="font-semibold">(02) 2834-5378</span>
           </div>
         </section>
 
