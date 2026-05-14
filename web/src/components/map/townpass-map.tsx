@@ -5,13 +5,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  FerrisWheel,
   MapPin,
   Search,
-  ShoppingBag,
   SlidersHorizontal,
   Tag,
-  Utensils,
   X,
 } from "lucide-react";
 import {
@@ -36,351 +33,49 @@ import {
   priceFilterOptions,
   specialFilterOptions,
   defaultRideFilters,
-  getFacilityWaitMinutes
+  getFacilityWaitMinutes,
 } from "@/src/lib/townpass-map-data";
+import {
+  MAP_MIN_ZOOM,
+  MAP_MAX_ZOOM,
+  MARKER_CLUSTER_MAX_ZOOM,
+  MARKER_CLUSTER_RADIUS,
+  DETAIL_SHEET_COLLAPSE_MS,
+  contentTypeOptions,
+} from "./townpass-map-constants";
+import {
+  centerMapOnPoint,
+  focusMapOnPoint,
+  focusMapOnPointAfterCardClick,
+  focusPointMapWithClusterAwareZoom,
+  setMapCenterAndZoom,
+} from "./townpass-map-camera";
+import { getCarouselIndexFromScroll, getCarouselSlideStride } from "./townpass-map-carousel";
+import {
+  clearMarker,
+  getFloorText,
+  getMapsNamespace,
+  getParkOperatingStatus,
+  getPointContentType,
+  getPointLabel,
+  getRecommendedHeightFilters,
+  isRidePoint,
+  matchesListFilter,
+  matchesTextFilter,
+  normalizePlaceName,
+} from "./townpass-map-helpers";
+import { createMapMarkerIcon } from "./townpass-map-markers";
+import type {
+  GoogleMapsInfoWindow,
+  GoogleMapsMap,
+  MapContentType,
+  MapLayerState,
+  MarkerClustererMap,
+  MarkerEntry,
+} from "./townpass-map-types";
 
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const googleMapsMapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
-
-type GoogleMapsMap = {
-  fitBounds: (bounds: GoogleMapsLatLngBounds, padding?: number) => void;
-  panTo: (position: { lat: number; lng: number }) => void;
-  setZoom: (zoom: number) => void;
-  getZoom?: () => number;
-  /** 同時設定中心與縮放，動畫通常比「先 pan 再 zoom」一氣呵成 */
-  setOptions?: (options: { zoom?: number; center?: { lat: number; lng: number } }) => void;
-};
-
-type GoogleMapsLegacyMarker = {
-  addListener: (eventName: string, callback: () => void) => void;
-  setMap: (map: GoogleMapsMap | null) => void;
-  getMap?: () => GoogleMapsMap | null | undefined;
-  setIcon: (icon: GoogleMapsMarkerIcon) => void;
-  setZIndex: (zIndex: number) => void;
-};
-
-type GoogleMapsMarkerIcon = {
-  url: string;
-  scaledSize: unknown;
-  anchor: unknown;
-};
-
-type GoogleMapsInfoWindow = {
-  close: () => void;
-};
-
-type GoogleMapsLatLngBounds = {
-  extend: (position: { lat: number; lng: number }) => void;
-};
-
-type GoogleMapsGroundOverlay = {
-  setMap: (map: GoogleMapsMap | null) => void;
-};
-
-type GoogleMapsNamespace = {
-  Map: new (
-    element: HTMLElement,
-    options: Record<string, unknown>,
-  ) => GoogleMapsMap;
-  Marker: new (options: Record<string, unknown>) => GoogleMapsLegacyMarker;
-  InfoWindow: new () => GoogleMapsInfoWindow;
-  LatLngBounds: new () => GoogleMapsLatLngBounds;
-  GroundOverlay: new (url: string, bounds: Record<string, number>, options?: Record<string, unknown>) => GoogleMapsGroundOverlay;
-  Point: new (x: number, y: number) => unknown;
-  Size: new (width: number, height: number) => unknown;
-};
-
-type MapLayerState = {
-  facilities: boolean;
-  restaurants: boolean;
-};
-
-type MapContentType = "facility" | "restaurant" | "shop";
-
-
-
-type MarkerEntry = {
-  marker: GoogleMapsLegacyMarker;
-  pointId: string;
-};
-
-type MarkerKind = "restaurant" | "shop" | "ferrisWheel";
-type MarkerClustererMap = ConstructorParameters<typeof MarkerClusterer>[0]["map"];
-
-const MAP_MIN_ZOOM = 10;
-const MAP_MAX_ZOOM = 22;
-const MARKER_CLUSTER_MAX_ZOOM = 18;
-const MARKER_CLUSTER_RADIUS = 64;
-/** 點選設施／輪播焦點時拉近到此倍率，讓單一設施清楚可見 */
-const FACILITY_FOCUS_ZOOM = 20;
-const DETAIL_SHEET_COLLAPSE_MS = 320;
-
-
-
-const contentTypeOptions: Array<{
-  value: MapContentType;
-  label: string;
-  Icon: typeof FerrisWheel;
-}> = [
-  { value: "facility", label: "遊樂設施", Icon: FerrisWheel },
-  { value: "restaurant", label: "餐廳", Icon: Utensils },
-  { value: "shop", label: "商店", Icon: ShoppingBag },
-];
-
-
-
-function normalizePlaceName(name: string) {
-  return name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
-}
-
-function getMapsNamespace(): GoogleMapsNamespace | null {
-  const maps = window.google?.maps;
-  if (!maps) {
-    return null;
-  }
-  return maps as unknown as GoogleMapsNamespace;
-}
-
-function getPointLabel(pointType: TownPassPoint["pointType"]) {
-  return pointType === "facility" ? "設施" : "餐飲";
-}
-
-function getFloorText(floor?: number | null) {
-  return typeof floor === "number" ? `${floor} 樓` : "樓層未標示";
-}
-
-function clearMarker(marker: GoogleMapsLegacyMarker) {
-  marker.setMap(null);
-}
-
-function getMarkerKind(point: TownPassPoint): MarkerKind {
-  const text = `${point.name}${point.category}`.toLowerCase();
-
-  if (text.includes("商店") || text.includes("超商") || text.includes("拍貼") || text.includes("化石")) return "shop";
-  if (point.pointType === "restaurant" || text.includes("餐") || text.includes("食")) return "restaurant";
-  return "ferrisWheel";
-}
-
-function getPointContentType(point: TownPassPoint): MapContentType {
-  if (point.pointType === "facility") {
-    return "facility";
-  }
-
-  return getMarkerKind(point) === "shop" ? "shop" : "restaurant";
-}
-
-function isRidePoint(point: TownPassPoint) {
-  return (
-    point.pointType === "facility" &&
-    ["大型遊樂設施", "K系列", "A系列"].includes(point.category)
-  );
-}
-
-function getRecommendedHeightFilters(childHeight: string) {
-  const height = Number(childHeight);
-  if (!Number.isFinite(height) || height <= 0) {
-    return [];
-  }
-
-  if (height < 90) {
-    return ["幼童友善"];
-  }
-
-  if (height < 110) {
-    return ["幼童友善", "小學門檻"];
-  }
-
-  return ["幼童友善", "小學門檻", "刺激挑戰"];
-}
-
-function matchesTextFilter(value: string | null | undefined, filters: string[]) {
-  if (filters.length === 0) {
-    return true;
-  }
-
-  if (!value) {
-    return false;
-  }
-
-  return filters.some(
-    (filter) =>
-      value.includes(filter) ||
-      (filter.includes("幼童友善") && value.includes("幼童友善")) ||
-      (filter.includes("小學門檻") && value.includes("小學門檻")) ||
-      (filter.includes("刺激挑戰") && value.includes("刺激挑戰")),
-  );
-}
-
-function matchesListFilter(values: string[] | undefined, filters: string[]) {
-  if (filters.length === 0) {
-    return true;
-  }
-
-  return Boolean(values?.some((value) => filters.some((filter) => value.includes(filter))));
-}
-
-function getMarkerIconPath(kind: MarkerKind) {
-  switch (kind) {
-    case "restaurant":
-      return '<path d="M28 16v38M22 16v14a6 6 0 0 0 12 0V16M44 16v38M44 16c6 3 8 9 6 17-1 4-3 7-6 8"/>';
-    case "ferrisWheel":
-      return '<circle cx="36" cy="33" r="17"/><circle cx="36" cy="33" r="3"/><path d="M36 36v18M25 56h22M29 54l7-18 7 18M36 16v-6M24 21l-4-4M48 21l4-4M19 33h-6M59 33h-6M24 45l-4 4M48 45l4 4"/><rect x="32" y="9" width="8" height="6" rx="2"/><rect x="16" y="29" width="8" height="6" rx="2"/><rect x="48" y="29" width="8" height="6" rx="2"/><rect x="20" y="45" width="8" height="6" rx="2"/><rect x="44" y="45" width="8" height="6" rx="2"/>';
-    case "shop":
-      return '<path d="M25 29h22l3 24H22l3-24Z"/><path d="M30 29v-5a6 6 0 0 1 12 0v5"/>';
-  }
-}
-
-
-
-function getParkOperatingStatus(date: Date) {
-  const day = date.getDay();
-  const minutes = date.getHours() * 60 + date.getMinutes();
-
-  if (day === 1) {
-    return {
-      isOpen: false,
-      label: "週一定期保養休園",
-      hours: "週一休園（國定假日除外）",
-    };
-  }
-
-  const closeMinutes = day === 6 ? 20 * 60 : day === 0 ? 18 * 60 : 17 * 60;
-  const isOpen = minutes >= 9 * 60 && minutes < closeMinutes;
-  const closeHour = String(closeMinutes / 60).padStart(2, "0");
-
-  return {
-    isOpen,
-    label: isOpen ? "營業中" : "非營業時間",
-    hours: `今日 09:00 - ${closeHour}:00`,
-  };
-}
-
-function createMapMarkerIcon(point: TownPassPoint, selected: boolean, maps: GoogleMapsNamespace) {
-  const fill = selected ? "#F36F7F" : "#FFFFFF";
-  const stroke = selected ? "#FFFFFF" : "#9AAEC8";
-  const size = selected ? 56 : 42;
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + 10}" viewBox="0 0 72 84">
-      <defs>
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-          <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#0B0D0E" flood-opacity="0.18"/>
-        </filter>
-      </defs>
-      <path filter="url(#shadow)" d="M18 5h36c8 0 13 5 13 13v35c0 8-5 13-13 13H43L36 78l-7-12H18C10 66 5 61 5 53V18C5 10 10 5 18 5Z" fill="${fill}"/>
-      <g fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-        ${getMarkerIconPath(getMarkerKind(point))}
-      </g>
-    </svg>
-  `;
-
-  return {
-    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new maps.Size(size, size + 10),
-    anchor: new maps.Point(size / 2, size + 6),
-  };
-}
-
-function scheduleMapIdleCallback(map: object, callback: () => void) {
-  type MapsEvent = { addListenerOnce?: (target: object, eventName: string, handler: () => void) => void };
-  const mapsBundle = window.google?.maps as { event?: MapsEvent } | undefined;
-  const eventApi = mapsBundle?.event;
-  if (eventApi?.addListenerOnce) {
-    eventApi.addListenerOnce(map, "idle", callback);
-  } else {
-    window.setTimeout(callback, 150);
-  }
-}
-
-/** 僅平移到點位（不改變縮放） */
-function centerMapOnPoint(map: GoogleMapsMap, point: { lat: number; lng: number }) {
-  map.panTo({ lat: point.lat, lng: point.lng });
-}
-
-/**
- * 輪播／箭頭／地圖上的單一標記：先平移；若該標記仍被 MarkerClusterer 收進數字裡（getMap 為空），再 zoom 拆叢集。
- * 點底部卡片開詳情請用 focusMapOnPointAfterCardClick（先 zoom 再 pan）。
- */
-function focusPointMapWithClusterAwareZoom(
-  map: GoogleMapsMap,
-  point: { lat: number; lng: number },
-  marker?: GoogleMapsLegacyMarker | null,
-) {
-  centerMapOnPoint(map, point);
-  if (marker == null) {
-    return;
-  }
-  scheduleMapIdleCallback(map as object, () => {
-    const attached = marker.getMap?.();
-    if (attached == null) {
-      focusMapOnPoint(map, point);
-    }
-  });
-}
-
-/** 同時移動中心與縮放，優先使用 setOptions 單次更新相機（動畫較順） */
-function setMapCenterAndZoom(
-  map: GoogleMapsMap,
-  center: { lat: number; lng: number },
-  zoom: number,
-) {
-  if (typeof map.setOptions === "function") {
-    map.setOptions({ center, zoom });
-    return;
-  }
-  map.panTo(center);
-  map.setZoom(zoom);
-}
-
-/** 以平移為主；需改變縮放時與 center 一併套用，避免先移再拉的兩段感 */
-function focusMapOnPoint(map: GoogleMapsMap, point: { lat: number; lng: number }) {
-  const targetZoom = Math.min(FACILITY_FOCUS_ZOOM, MAP_MAX_ZOOM);
-  const center = { lat: point.lat, lng: point.lng };
-
-  const currentZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
-  if (typeof currentZoom === "number" && Math.abs(currentZoom - targetZoom) <= 0.4) {
-    map.panTo(center);
-    return;
-  }
-
-  setMapCenterAndZoom(map, center, targetZoom);
-}
-
-/** 點底部卡片開詳情：先 setZoom，idle 後再 panTo 對準該點 */
-function focusMapOnPointAfterCardClick(map: GoogleMapsMap, point: { lat: number; lng: number }) {
-  const targetZoom = Math.min(FACILITY_FOCUS_ZOOM, MAP_MAX_ZOOM);
-  const center = { lat: point.lat, lng: point.lng };
-
-  const currentZoom = typeof map.getZoom === "function" ? map.getZoom() : undefined;
-  if (typeof currentZoom === "number" && Math.abs(currentZoom - targetZoom) <= 0.4) {
-    map.panTo(center);
-    return;
-  }
-
-  map.setZoom(targetZoom);
-  scheduleMapIdleCallback(map as object, () => {
-    map.panTo(center);
-  });
-}
-
-function getCarouselSlideStride(container: HTMLDivElement) {
-  const first = container.firstElementChild as HTMLElement | null;
-  if (!first) {
-    return Math.max(1, container.clientWidth);
-  }
-  const styles = window.getComputedStyle(container);
-  const gap = Number.parseFloat(styles.columnGap || styles.gap || "0") || 0;
-  return first.offsetWidth + gap;
-}
-
-function getCarouselIndexFromScroll(container: HTMLDivElement, slideCount: number) {
-  const maxIdx = Math.max(0, slideCount - 1);
-  const stride = getCarouselSlideStride(container);
-  if (stride <= 0) {
-    return 0;
-  }
-  const index = Math.round(container.scrollLeft / stride);
-  return Math.min(maxIdx, Math.max(0, index));
-}
 
 export function TownPassMap() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -390,7 +85,7 @@ export function TownPassMap() {
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const infoWindowRef = useRef<GoogleMapsInfoWindow | null>(null);
   const markersRef = useRef<MarkerEntry[]>([]);
-  const userMarkerRef = useRef<GoogleMapsLegacyMarker | null>(null);
+  const userMarkerRef = useRef<MarkerEntry["marker"] | null>(null);
   const clustererRef = useRef<MarkerClusterer | null>(null);
   /** 點數字叢集後略過一次「無輪播焦點時 fitBounds」，避免抵銷 zoom，也不要讓地圖誤以為焦點是第一筆 visible */
   const skipNextFitBoundsAfterClusterRef = useRef(false);
@@ -447,6 +142,7 @@ export function TownPassMap() {
       cancelled = true;
     };
   }, []);
+
   const [userPosition] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
@@ -513,9 +209,7 @@ export function TownPassMap() {
         }
 
         setAllPoints(loadedPoints);
-        setStatusText(
-          `Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`,
-        );
+        setStatusText(`Google Maps 載入完成，共 ${loadedPoints.length} 個點位（設施與餐飲）。`);
       } catch {
         if (!cancelled) {
           setStatusText("Google Maps 載入失敗，請檢查 API Key 或網路。");
@@ -566,10 +260,7 @@ export function TownPassMap() {
       if (selectedContentType === "facility") {
         const detail = placeDetailsByName.get(normalizePlaceName(point.name));
         const filters = detail?.filters;
-        const combinedSpecial = [
-          ...(filters?.special ?? []),
-          ...(filters?.environment ?? []),
-        ];
+        const combinedSpecial = [...(filters?.special ?? []), ...(filters?.environment ?? [])];
 
         if (!matchesTextFilter(filters?.height, rideFilters.height)) return false;
         if (!matchesTextFilter(filters?.thrill, rideFilters.thrill)) return false;
@@ -755,7 +446,7 @@ export function TownPassMap() {
           }) as unknown as ClusterMarker;
         },
       };
-      clustererRef.current = new MarkerClusterer({ 
+      clustererRef.current = new MarkerClusterer({
         map: mapRef.current as unknown as MarkerClustererMap,
         renderer,
         onClusterClick: (_event, cluster, map) => {
@@ -781,7 +472,7 @@ export function TownPassMap() {
         algorithm: new SuperClusterAlgorithm({
           maxZoom: MARKER_CLUSTER_MAX_ZOOM,
           radius: MARKER_CLUSTER_RADIUS,
-        })
+        }),
       });
     }
 
@@ -808,11 +499,7 @@ export function TownPassMap() {
           pendingMapFocusPointIdRef.current = null;
         } else {
           const markerEntry = markersRef.current.find((e) => e.pointId === carouselPoint.id);
-          focusPointMapWithClusterAwareZoom(
-            mapRef.current,
-            carouselPoint,
-            markerEntry?.marker,
-          );
+          focusPointMapWithClusterAwareZoom(mapRef.current, carouselPoint, markerEntry?.marker);
         }
       } else {
         if (skipNextFitBoundsAfterClusterRef.current) {
@@ -822,10 +509,14 @@ export function TownPassMap() {
         }
       }
     } else if (!userPosition && visiblePoints.length === 1) {
-      setMapCenterAndZoom(mapRef.current, {
-        lat: visiblePoints[0].lat,
-        lng: visiblePoints[0].lng,
-      }, 18);
+      setMapCenterAndZoom(
+        mapRef.current,
+        {
+          lat: visiblePoints[0].lat,
+          lng: visiblePoints[0].lng,
+        },
+        18,
+      );
     }
   }, [activeCarouselPointId, selectedPointId, userPosition, visiblePoints]);
 
@@ -866,12 +557,12 @@ export function TownPassMap() {
 
   const selectedFilterTags = selectedPlaceDetail
     ? [
-      selectedPlaceDetail.filters?.height,
-      selectedPlaceDetail.filters?.thrill,
-      ...(selectedPlaceDetail.filters?.environment ?? []),
-      selectedPlaceDetail.filters?.price,
-      ...(selectedPlaceDetail.filters?.special ?? []),
-    ].filter((tag): tag is string => Boolean(tag))
+        selectedPlaceDetail.filters?.height,
+        selectedPlaceDetail.filters?.thrill,
+        ...(selectedPlaceDetail.filters?.environment ?? []),
+        selectedPlaceDetail.filters?.price,
+        ...(selectedPlaceDetail.filters?.special ?? []),
+      ].filter((tag): tag is string => Boolean(tag))
     : [];
 
   const selectedOperatingStatus = useMemo(
@@ -925,10 +616,11 @@ export function TownPassMap() {
               key={option}
               type="button"
               onClick={() => toggleRideFilter(key, option)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${selected
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                selected
                   ? "border-primary bg-primary text-white"
                   : "border-grayscale-100 bg-white text-grayscale-700"
-                }`}
+              }`}
               aria-pressed={selected}
             >
               {option}
@@ -958,10 +650,7 @@ export function TownPassMap() {
           100% { transform: scale(1.35); opacity: 0; }
         }
       `}</style>
-      <div
-        ref={mapContainerRef}
-        className="h-full w-full bg-grayscale-50"
-      />
+      <div ref={mapContainerRef} className="h-full w-full bg-grayscale-50" />
 
       <div className="absolute left-0 right-0 top-0 z-20 space-y-2 px-4 py-3">
         <div className="grid grid-cols-3 gap-2 rounded-xl border border-grayscale-100 bg-white p-1 shadow-sm">
@@ -971,10 +660,9 @@ export function TownPassMap() {
               <button
                 key={value}
                 onClick={() => selectContentType(value)}
-                className={`flex h-10 items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition active:scale-95 ${selected
-                    ? "bg-primary text-white"
-                    : "text-grayscale-600"
-                  }`}
+                className={`flex h-10 items-center justify-center gap-1.5 rounded-lg text-xs font-bold transition active:scale-95 ${
+                  selected ? "bg-primary text-white" : "text-grayscale-600"
+                }`}
               >
                 <Icon className="h-4 w-4" />
                 {label}
@@ -996,10 +684,11 @@ export function TownPassMap() {
           {selectedContentType === "facility" && (
             <button
               onClick={() => setFilterPanelOpen((open) => !open)}
-              className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${filterPanelOpen || hasActiveRideFilters
+              className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${
+                filterPanelOpen || hasActiveRideFilters
                   ? "border-primary bg-primary text-white"
                   : "border-grayscale-100 bg-white text-primary"
-                }`}
+              }`}
               aria-expanded={filterPanelOpen}
               aria-label="開啟地圖篩選器"
             >
@@ -1041,8 +730,9 @@ export function TownPassMap() {
 
       <div className="absolute bottom-0 left-0 right-0 z-20 px-4 pb-4">
         <div
-          className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
-            }`}
+          className={`rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur transition-all duration-300 ${
+            detailSheetExpanded ? "max-h-[72vh] overflow-y-auto" : "max-h-56 overflow-hidden"
+          }`}
         >
           {selectedPoint ? (
             <div className="space-y-4 pt-1">
@@ -1091,13 +781,15 @@ export function TownPassMap() {
               </div>
 
               <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${detailSheetExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                  }`}
+                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
+                  detailSheetExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
               >
                 <div className="min-h-0 overflow-hidden">
                   <div
-                    className={`space-y-4 border-t border-grayscale-100 pt-4 ${detailSheetExpanded ? "" : "pointer-events-none"
-                      }`}
+                    className={`space-y-4 border-t border-grayscale-100 pt-4 ${
+                      detailSheetExpanded ? "" : "pointer-events-none"
+                    }`}
                     aria-hidden={!detailSheetExpanded}
                   >
                     <div className="grid grid-cols-2 gap-3">
@@ -1217,16 +909,15 @@ export function TownPassMap() {
                   >
                     <div className="mb-2 flex items-center gap-1.5">
                       <span
-                        className={`h-2.5 w-2.5 rounded-full ${point.pointType === "facility" ? "bg-primary" : "bg-red-500"
-                          }`}
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          point.pointType === "facility" ? "bg-primary" : "bg-red-500"
+                        }`}
                       />
                       <span className="text-[11px] font-bold text-grayscale-500">
                         {getPointLabel(point.pointType)}
                       </span>
                     </div>
-                    <p className="truncate text-base font-semibold text-grayscale-900">
-                      {point.name}
-                    </p>
+                    <p className="truncate text-base font-semibold text-grayscale-900">{point.name}</p>
                     <p className="mt-1 truncate text-xs font-medium text-grayscale-500">
                       {point.pointType === "facility"
                         ? `等待 ${getFacilityWaitMinutes(point)} 分鐘`
