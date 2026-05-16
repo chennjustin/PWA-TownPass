@@ -26,7 +26,7 @@ export function ProfilePage() {
           <button className="text-primary font-semibold text-sm">全部紀錄</button>
         </div>
         
-        <div className="bg-white rounded-xl overflow-hidden border border-grayscale-100 shadow-sm relative">
+        <div className="tp-card relative overflow-hidden">
           <div className="p-4 bg-primary text-white flex justify-between items-start">
             <div>
               <p className="text-[10px] opacity-80 font-bold uppercase tracking-wider">Taipei Amusement Pass</p>
@@ -39,7 +39,7 @@ export function ProfilePage() {
             <div className="bg-white p-3 rounded-lg border border-grayscale-100">
               {/* QR Code Placeholder */}
               <div className="w-32 h-32 bg-grayscale-50 flex items-center justify-center relative overflow-hidden" 
-                style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #5AB4C5 1px, transparent 0)', backgroundSize: '10px 10px' }}>
+                style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, #80deea 1px, transparent 0)', backgroundSize: '10px 10px' }}>
                 <div className="bg-white p-2 rounded shadow-sm border border-grayscale-100 flex items-center justify-center">
                   <div className="w-20 h-20 bg-primary/20 rounded flex items-center justify-center">
                     <span className="text-primary text-xs font-bold font-mono">QR CODE</span>
@@ -60,13 +60,13 @@ export function ProfilePage() {
 
       {/* Quick Links */}
       <section className="grid grid-cols-2 gap-3">
-        <button className="flex flex-col items-center justify-center p-6 bg-white border border-grayscale-100 rounded-xl hover:bg-primary-50 transition-all active:scale-95 shadow-sm">
+        <button className="tp-card flex flex-col items-center justify-center p-6 transition-all hover:bg-primary-50 active:scale-95">
           <div className="w-12 h-12 rounded-full bg-primary-100 text-primary flex items-center justify-center mb-2">
             <FileText className="w-6 h-6" />
           </div>
           <span className="font-semibold text-sm text-grayscale-900">預約紀錄</span>
         </button>
-        <button className="flex flex-col items-center justify-center p-6 bg-white border border-grayscale-100 rounded-xl hover:bg-primary-50 transition-all active:scale-95 shadow-sm">
+        <button className="tp-card flex flex-col items-center justify-center p-6 transition-all hover:bg-primary-50 active:scale-95">
           <div className="w-12 h-12 rounded-full bg-secondary-container/20 text-secondary flex items-center justify-center mb-2">
             <Tag className="w-6 h-6" />
           </div>
@@ -77,7 +77,7 @@ export function ProfilePage() {
       {/* Settings List */}
       <section className="space-y-3">
         <h3 className="font-display font-semibold text-md text-grayscale-900 px-1">更多設定</h3>
-        <div className="bg-white border border-grayscale-100 rounded-xl overflow-hidden divide-y divide-grayscale-100">
+        <div className="tp-card divide-y divide-grayscale-100 overflow-hidden">
           {[
             { icon: UserCircle, label: '帳號設定' },
             { icon: Shield, label: '隱私權聲明' },

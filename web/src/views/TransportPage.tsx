@@ -27,8 +27,8 @@ const drivingRoutes = [
 
 export function TransportPage() {
   return (
-    <section className="h-full overflow-y-auto no-scrollbar bg-white pb-24">
-      <div className="sticky top-0 z-20 border-b border-grayscale-100 bg-white/95 px-4 pb-3 pt-4 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+    <section className="h-full overflow-y-auto no-scrollbar pb-24">
+      <div className="sticky top-0 z-20 border-b border-grayscale-100 bg-white/95 px-4 pb-3 pt-4 backdrop-blur supports-[backdrop-filter]:bg-white/90">
         <div className="flex items-center gap-2">
           <Link
             href="/"
@@ -49,7 +49,7 @@ export function TransportPage() {
             <h3 className="font-semibold text-on-surface">一、大眾運輸</h3>
           </div>
 
-          <div className="space-y-2 rounded-lg bg-grayscale-50 p-3">
+          <div className="tp-card space-y-2 p-3">
             <h4 className="text-sm font-semibold text-grayscale-900">捷運轉乘公車</h4>
             <ul className="space-y-1.5 text-sm leading-relaxed text-grayscale-700">
               {metroBusRoutes.map((item) => (
@@ -76,7 +76,7 @@ export function TransportPage() {
             </ul>
           </div>
 
-          <div className="rounded-lg border border-grayscale-100 p-3">
+          <div className="tp-card p-3">
             <h4 className="text-sm font-semibold text-grayscale-900">高鐵、臺鐵</h4>
             <p className="mt-1 text-sm leading-relaxed text-grayscale-700">
               • 搭乘至臺北車站，轉捷運淡水信義線至劍潭站、士林站或芝山站，再轉乘公車。
@@ -96,7 +96,7 @@ export function TransportPage() {
             ))}
           </ul>
 
-          <p className="inline-flex items-center gap-1 rounded-full bg-grayscale-100 px-3 py-1 text-sm font-semibold text-grayscale-800">
+          <p className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-800">
             <Navigation className="h-4 w-4 text-primary" />
             GPS 座標：東經 121°30&apos;54.5&apos;&apos;、北緯 25°05&apos;48&apos;&apos;
           </p>
@@ -109,15 +109,15 @@ export function TransportPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+            <div className="rounded-2xl bg-white px-2 py-2 shadow-[var(--shadow-card)]">
               <p className="text-[11px] text-grayscale-500">汽車車格</p>
               <p className="text-sm font-semibold text-grayscale-900">442</p>
             </div>
-            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+            <div className="rounded-2xl bg-white px-2 py-2 shadow-[var(--shadow-card)]">
               <p className="text-[11px] text-grayscale-500">機車車格</p>
               <p className="text-sm font-semibold text-grayscale-900">393</p>
             </div>
-            <div className="rounded-lg border border-grayscale-100 px-2 py-2">
+            <div className="rounded-2xl bg-white px-2 py-2 shadow-[var(--shadow-card)]">
               <p className="text-[11px] text-grayscale-500">限高</p>
               <p className="text-sm font-semibold text-grayscale-900">2.1m</p>
             </div>
@@ -145,7 +145,7 @@ export function TransportPage() {
             <p>• 不提供固定或保留車位，滿位時需排隊。</p>
           </div>
 
-          <div className="rounded-lg bg-grayscale-50 p-3 text-sm text-grayscale-700">
+          <div className="tp-card-accent p-3 text-sm text-grayscale-700">
             停車場管理室 / 24 小時客服：<span className="font-semibold">(02) 2834-5378</span>
           </div>
         </section>

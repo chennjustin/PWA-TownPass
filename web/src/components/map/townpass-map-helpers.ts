@@ -1,4 +1,4 @@
-import type { TownPassPoint } from "@/src/lib/townpass-map-data";
+import type { PlaceDetail, RideFilterState, TownPassPoint } from "@/src/lib/townpass-map-data";
 import type {
   GoogleMapsLegacyMarker,
   GoogleMapsNamespace,
@@ -6,8 +6,23 @@ import type {
   MarkerKind,
 } from "./townpass-map-types";
 
+import {
+  getDisplayFacilityName,
+  getDisplayPlaceCategory,
+  shouldHideFacilityFilterTag,
+} from "@/src/lib/facility-display";
+
+export {
+  getDisplayFacilityName,
+  getDisplayPlaceCategory,
+  stripFacilityNamePrefix,
+} from "@/src/lib/facility-display";
+
 export function normalizePlaceName(name: string) {
-  return name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
+  return getDisplayFacilityName(name)
+    .replace(/\s+/g, "")
+    .replace(/[()（）]/g, "")
+    .toLowerCase();
 }
 
 export function getMapsNamespace(): GoogleMapsNamespace | null {
@@ -18,8 +33,18 @@ export function getMapsNamespace(): GoogleMapsNamespace | null {
   return maps as unknown as GoogleMapsNamespace;
 }
 
-export function getPointLabel(pointType: TownPassPoint["pointType"]) {
-  return pointType === "facility" ? "設施" : "餐飲";
+export function getPointLabel(point: TownPassPoint) {
+  if (point.pointType === "facility") {
+    return "設施";
+  }
+  return getMarkerKind(point) === "shop" ? "商店" : "餐飲";
+}
+
+export function getPointLabelDotClass(point: TownPassPoint) {
+  if (point.pointType === "facility") {
+    return "bg-primary";
+  }
+  return getMarkerKind(point) === "shop" ? "bg-secondary-500" : "bg-red-500";
 }
 
 export function getFloorText(floor?: number | null) {
@@ -51,6 +76,72 @@ export function isRidePoint(point: TownPassPoint) {
   return (
     point.pointType === "facility" &&
     ["大型遊樂設施", "K系列", "A系列"].includes(point.category)
+  );
+}
+
+export function buildPlaceDetailsMap(places: PlaceDetail[]) {
+  const map = new Map<string, PlaceDetail>();
+
+  for (const place of places) {
+    map.set(normalizePlaceName(place.name), place);
+    for (const alias of place.aliases ?? []) {
+      map.set(normalizePlaceName(alias), place);
+    }
+  }
+
+  return map;
+}
+
+/** 回傳此設施符合的使用者已選篩選條件（用於列表卡片標籤） */
+export function getMatchingActiveFilterLabels(
+  filters: PlaceDetail["filters"] | undefined,
+  rideFilters: RideFilterState,
+) {
+  const labels: string[] = [];
+  const combinedSpecial = [...(filters?.special ?? []), ...(filters?.environment ?? [])];
+
+  for (const value of rideFilters.height) {
+    if (matchesTextFilter(filters?.height, [value])) {
+      labels.push(value);
+    }
+  }
+  for (const value of rideFilters.thrill) {
+    if (matchesTextFilter(filters?.thrill, [value])) {
+      labels.push(value);
+    }
+  }
+  for (const value of rideFilters.environment) {
+    if (matchesListFilter(filters?.environment, [value])) {
+      labels.push(value);
+    }
+  }
+  for (const value of rideFilters.price) {
+    if (matchesTextFilter(filters?.price, [value])) {
+      labels.push(value);
+    }
+  }
+  for (const value of rideFilters.special) {
+    if (matchesListFilter(combinedSpecial, [value])) {
+      labels.push(value);
+    }
+  }
+
+  return labels;
+}
+
+export function getPlaceDetailFilterTags(detail: PlaceDetail | null | undefined) {
+  if (!detail?.filters) {
+    return [];
+  }
+
+  return [
+    detail.filters.height,
+    detail.filters.thrill,
+    ...(detail.filters.environment ?? []),
+    detail.filters.price,
+    ...(detail.filters.special ?? []),
+  ].filter(
+    (tag): tag is string => typeof tag === "string" && tag.length > 0 && !shouldHideFacilityFilterTag(tag),
   );
 }
 
@@ -96,6 +187,8 @@ export function matchesListFilter(values: string[] | undefined, filters: string[
 
   return Boolean(values?.some((value) => filters.some((filter) => value.includes(filter))));
 }
+
+export type ParkOperatingStatus = ReturnType<typeof getParkOperatingStatus>;
 
 export function getParkOperatingStatus(date: Date) {
   const day = date.getDay();

@@ -1,3 +1,6 @@
+/** Content width inside the 430px app shell (frame + page horizontal padding). */
+export const APP_SHELL_IMAGE_SIZES = '382px';
+
 export const IMAGES = {
   BANNER: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDmLPoSgiOzvTqQsEb1DeQlCZdHDwRlky-GQqrbcg5cpbqlVB5h1zEeVZSz3VQ52toVgvcJmAdAVYivh_b3At1jBcQaVwyz7gN6tzAp86jd8RE0jiLhPQMyD_htrZQKZROTW99I0ElFBrKaRZIlzJZxoaMFIJ3F2YR7N5geITcwUd8rNEntmPvk3OIhuCx3Nmua9KmQ9oDJfYmH0DE2Zwu0MUE_HxWicLjxF30SQSUCACPg9SS5Ot6V52mm_3YngdGCY08UpQ1Qm_E',
   FOOD: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDeMlhjSvcBTE5neewFfgR_fyIFC19Lv6IbBAXBzyN5bMkncdq7EC-1uiND2M-KvPjUjLbWvo4WbNfcntP2DfWDjasIsJtv1VHM3nbycw8a9Ak9f7wJ6Vw-qpKUI-PoS2kiq3fGBn71BUqq-La1arvhn2bs2zuOsbESWIqf8YGozV1TayU7_TzLRf7w47MId9-LRE9awFwu0wxGt5ddClU_kDu9vF4HPKTOQAUIXIcAMD2ep8LR46vWQMBadG6bdCBz4Q2Eu8HpgUk',

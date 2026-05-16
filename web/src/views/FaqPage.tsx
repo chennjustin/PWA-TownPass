@@ -102,8 +102,8 @@ export function FaqPage() {
   };
 
   return (
-    <section className="h-full overflow-y-auto no-scrollbar bg-white pb-24">
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+    <section className="h-full overflow-y-auto no-scrollbar pb-24">
+      <div className="sticky top-0 z-20 border-b border-grayscale-100 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/90">
         <div className="px-4 pb-3 pt-4">
           <div className="flex items-center gap-2">
             <Link
@@ -116,8 +116,8 @@ export function FaqPage() {
             <h2 className="text-lg font-semibold text-on-surface">常見問題</h2>
           </div>
 
-          <div className="mt-3 flex items-center gap-2 rounded-lg border border-grayscale-100 px-3">
-            <Search className="h-4 w-4 text-grayscale-500" />
+          <div className="relative mt-3">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -128,9 +128,9 @@ export function FaqPage() {
                 }
               }}
               placeholder="搜尋關鍵字"
-              className="h-10 min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-grayscale-400"
+              className="tp-search-field pr-16"
             />
-            <span className="text-xs font-semibold text-[#0097A7]">
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary">
               {filteredFaqs.length}/{townPassFaqData.length}
             </span>
           </div>
@@ -162,7 +162,7 @@ export function FaqPage() {
                   className={cn(
                     'shrink-0 border-b-2 px-3 py-2 text-xs font-semibold transition',
                     active
-                      ? 'border-[#0097A7] text-[#0097A7]'
+                      ? 'border-primary text-primary'
                       : 'border-transparent text-grayscale-500',
                   )}
                 >
@@ -184,8 +184,8 @@ export function FaqPage() {
 
         {groupedFaqs.map((group) => (
           <section key={group.category} className="space-y-1">
-            <h3 className="text-sm font-semibold text-[#007A87]">{group.category}</h3>
-            <div className="overflow-hidden rounded-lg border border-grayscale-100">
+            <h3 className="text-sm font-semibold text-primary-700">{group.category}</h3>
+            <div className="tp-card overflow-hidden">
               {group.items.map((item, index) => {
                 const expanded = expandedIds.has(item.id);
 

@@ -1,9 +1,25 @@
 'use client';
 
 import Image from 'next/image';
-import { type ComponentType, useEffect, useMemo, useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, MapPin, ChevronRight, Layers, Rocket, Bike, Sparkles, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
-import { IMAGES } from '@/src/constants';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Search, MapPin, ChevronRight, Layers, Rocket, Bike, Navigation, Bookmark, Crosshair, Ticket } from 'lucide-react';
+import { APP_SHELL_IMAGE_SIZES, IMAGES } from '@/src/constants';
+import { getFacilityImageUrl } from '@/src/lib/facility-images';
+import {
+  FacilityFilterToggleButton,
+  FacilityRideFilterPanel,
+  getActiveRideFilterCount,
+} from '@/src/components/FacilityRideFilterPanel';
+import {
+  buildPlaceDetailsMap,
+  getFloorText,
+  getMatchingActiveFilterLabels,
+  isRidePoint,
+  matchesListFilter,
+  matchesTextFilter,
+  normalizePlaceName,
+} from '@/src/components/map/townpass-map-helpers';
 import {
   loadTownPassPoints,
   getFacilityWaitMinutes,
@@ -11,13 +27,9 @@ import {
   type PlaceDetail,
   type PlaceDetailsResponse,
   PLACE_DETAILS_URL,
-  heightFilterOptions,
-  thrillFilterOptions,
-  environmentFilterOptions,
-  priceFilterOptions,
-  specialFilterOptions,
   defaultRideFilters,
 } from '@/src/lib/townpass-map-data';
+import { cn } from '@/src/lib/utils';
 
 type ListPageProps = {
   initialView?: 'list' | 'map';
@@ -28,12 +40,11 @@ type Attraction = {
   name: string;
   waitMinutes: number;
   wait: string;
-  tag: string;
-  restriction: string;
   area: string;
   image: string;
-  icon: ComponentType<{ className?: string }>;
   filters?: PlaceDetail['filters'];
+  description?: string;
+  floor?: number | null;
 };
 
 const fallbackAttractions: Attraction[] = [
@@ -42,63 +53,38 @@ const fallbackAttractions: Attraction[] = [
     name: '雲霄飛車',
     waitMinutes: 45,
     wait: '45 分鐘',
-    tag: '驚險刺激',
-    restriction: '120cm',
     area: '未來世界區',
     floor: null,
-    dist: '250m',
     image: IMAGES.ROLLERCOASTER,
-    icon: Rocket
   },
   {
     id: 'fallback-2',
     name: '夢幻旋轉木馬',
     waitMinutes: 5,
     wait: '5 分鐘',
-    tag: '親子同樂',
-    restriction: '無限制',
     area: '童話王國區',
     floor: null,
-    dist: '100m',
     image: IMAGES.CAROUSEL,
-    icon: Sparkles
   },
   {
     id: 'fallback-3',
     name: '擎天一柱',
     waitMinutes: 60,
     wait: '60 分鐘',
-    tag: '驚險刺激',
-    restriction: '140cm',
     area: '冒險之巔',
     floor: null,
-    dist: '450m',
     image: IMAGES.DROP_TOWER,
-    icon: Layers
   },
   {
     id: 'fallback-4',
     name: '叢林大探險',
     waitMinutes: 30,
     wait: '30 分鐘',
-    tag: '水上樂園',
-    restriction: '110cm',
     area: '熱帶雨林區',
     floor: null,
-    dist: '800m',
     image: IMAGES.RIVER_RAPIDS,
-    icon: Bike
-  }
+  },
 ];
-
-const attractionImages = [
-  IMAGES.ROLLERCOASTER,
-  IMAGES.CAROUSEL,
-  IMAGES.DROP_TOWER,
-  IMAGES.RIVER_RAPIDS,
-];
-
-const attractionIcons = [Rocket, Sparkles, Layers, Bike];
 
 export function ListPage({ initialView = 'list' }: ListPageProps) {
   const viewMode = initialView;
@@ -118,36 +104,31 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
           fetch(PLACE_DETAILS_URL, { cache: "no-store" }).catch(() => null),
         ]);
 
-        if (cancelled || facilityPoints.length === 0) {
+        const ridePoints = facilityPoints.filter(isRidePoint);
+
+        if (cancelled || ridePoints.length === 0) {
           return;
         }
 
-        const detailsMap = new Map<string, PlaceDetail>();
-        if (detailsRes && detailsRes.ok) {
+        let detailsMap = new Map<string, PlaceDetail>();
+        if (detailsRes?.ok) {
           const detailsData = (await detailsRes.json()) as PlaceDetailsResponse;
-          for (const place of detailsData.places ?? []) {
-            const name = place.name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
-            detailsMap.set(name, place);
-          }
+          detailsMap = buildPlaceDetailsMap(detailsData.places ?? []);
         }
 
         setAttractions(
-          facilityPoints.map((point, index) => {
-            const normalizedName = point.name.replace(/\s+/g, "").replace(/[()（）]/g, "").toLowerCase();
-            const detail = detailsMap.get(normalizedName);
+          ridePoints.map((point, index) => {
+            const detail = detailsMap.get(normalizePlaceName(point.name));
             const waitMin = getFacilityWaitMinutes(point);
             return {
               id: point.id,
               name: point.name,
               waitMinutes: waitMin,
               wait: `${waitMin} 分鐘`,
-              tag: point.category,
-              restriction: detail?.filters?.height ?? '無限制',
-              area: typeof point.floor === 'number' ? `${point.floor} 樓` : '園區設施',
+              description: detail?.description,
+              area: getFloorText(point.floor),
               floor: point.floor ?? null,
-              dist: `${Math.max(80, Math.round(index * 35 + 100))}m`,
-              image: attractionImages[index % attractionImages.length],
-              icon: attractionIcons[index % attractionIcons.length],
+              image: getFacilityImageUrl(point.id),
               filters: detail?.filters,
             };
           }),
@@ -173,36 +154,22 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
       const matchesQuery =
         normalizedQuery.length === 0 ||
         attr.name.toLowerCase().includes(normalizedQuery) ||
-        attr.tag.toLowerCase().includes(normalizedQuery);
+        (attr.description?.toLowerCase().includes(normalizedQuery) ?? false) ||
+        attr.area.toLowerCase().includes(normalizedQuery);
       
       if (!matchesQuery) return false;
 
       const filters = attr.filters;
-      
-      const checkTextFilter = (value: string | null | undefined, filter: string | null) => {
-        if (!filter) return true;
-        if (!value) return false;
-        return value.includes(filter) ||
-          (filter.includes("幼童友善") && value.includes("幼童友善")) ||
-          (filter.includes("小學門檻") && value.includes("小學門檻")) ||
-          (filter.includes("刺激挑戰") && value.includes("刺激挑戰"));
-      };
-
-      const checkListFilter = (values: string[] | undefined, filter: string | null) => {
-        if (!filter) return true;
-        return Boolean(values?.some((value) => value.includes(filter)));
-      };
-
       const combinedSpecial = [
         ...(filters?.special ?? []),
         ...(filters?.environment ?? []),
       ];
 
-      if (!checkTextFilter(filters?.height, rideFilters.height)) return false;
-      if (!checkTextFilter(filters?.thrill, rideFilters.thrill)) return false;
-      if (!checkListFilter(filters?.environment, rideFilters.environment)) return false;
-      if (!checkTextFilter(filters?.price, rideFilters.price)) return false;
-      if (!checkListFilter(combinedSpecial, rideFilters.special)) return false;
+      if (!matchesTextFilter(filters?.height, rideFilters.height)) return false;
+      if (!matchesTextFilter(filters?.thrill, rideFilters.thrill)) return false;
+      if (!matchesListFilter(filters?.environment, rideFilters.environment)) return false;
+      if (!matchesTextFilter(filters?.price, rideFilters.price)) return false;
+      if (!matchesListFilter(combinedSpecial, rideFilters.special)) return false;
 
       return true;
     });
@@ -224,204 +191,164 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
     setRideFilters(defaultRideFilters);
   };
 
+  const activeRideFilterCount = getActiveRideFilterCount(rideFilters);
+  const hasActiveRideFilters = activeRideFilterCount > 0;
   const hasActiveFilters =
-    query.trim().length > 0 ||
-    sortDirection !== null ||
-    Object.values(rideFilters).some((value) => value !== null);
+    query.trim().length > 0 || sortDirection !== null || hasActiveRideFilters;
 
-  const setRideFilter = (key: keyof RideFilterState, value: string) => {
-    setRideFilters((prev) => ({
-      ...prev,
-      [key]: value === "" ? null : value,
-    }));
-  };
-
-  const selectClassName = (active: boolean) =>
-    `h-10 appearance-none rounded-full border px-4 pr-9 text-sm font-semibold outline-none transition ${
-      active
-        ? 'border-primary bg-primary text-white shadow-sm'
-        : 'border-grayscale-100 bg-white text-grayscale-700'
-    }`;
+  const sortOptions: { value: 'asc' | 'desc' | null; label: string }[] = [
+    { value: null, label: '預設' },
+    { value: 'asc', label: '等待最短' },
+    { value: 'desc', label: '等待最長' },
+  ];
 
   return (
     <div className="relative h-full flex flex-col">
       {/* Header Controls */}
-      <div className="absolute left-0 right-0 top-0 z-20 px-4 py-3 space-y-3 border-b border-grayscale-100 bg-surface shadow-sm">
-        <div className="flex gap-2 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-grayscale-500" />
-            <input 
+      <div className="absolute left-0 right-0 top-0 z-20 space-y-3 border-b border-grayscale-100 bg-white/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+        <div className="relative">
+          <div className="relative pr-[4.25rem]">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-grayscale-500" />
+            <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="w-full h-11 pl-10 pr-4 bg-white border border-grayscale-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="搜尋設施或表演..." 
+              className="tp-search-field shadow-sm"
+              placeholder="搜尋設施或表演..."
             />
           </div>
-          <button
+          <FacilityFilterToggleButton
+            className="absolute right-0 top-0"
+            open={filterPanelOpen}
+            activeCount={activeRideFilterCount}
+            highlighted={filterPanelOpen || hasActiveRideFilters}
             onClick={() => setFilterPanelOpen((open) => !open)}
-            className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
-              filterPanelOpen || hasActiveFilters
-                ? 'border-primary bg-primary text-white shadow-sm'
-                : 'border-grayscale-100 bg-white text-primary hover:bg-primary-50'
-            }`}
-            aria-expanded={filterPanelOpen}
-            aria-label="開啟篩選器"
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
+            ariaLabel="開啟設施篩選器"
+          />
         </div>
 
         {filterPanelOpen && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            <label className="relative shrink-0">
-              <select
-                value={sortDirection ?? ''}
-                onChange={(event) =>
-                  setSortDirection(
-                    event.target.value === ''
-                      ? null
-                      : (event.target.value as 'asc' | 'desc'),
-                  )
-                }
-                className={selectClassName(sortDirection !== null)}
-              >
-                <option value="">等待時間</option>
-                <option value="asc">等待時間（最短）</option>
-                <option value="desc">等待時間（最長）</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <label className="relative shrink-0">
-              <select
-                value={rideFilters.height ?? ""}
-                onChange={(event) => setRideFilter("height", event.target.value)}
-                className={selectClassName(rideFilters.height !== null)}
-              >
-                <option value="">身高限制</option>
-                {heightFilterOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <label className="relative shrink-0">
-              <select
-                value={rideFilters.thrill ?? ""}
-                onChange={(event) => setRideFilter("thrill", event.target.value)}
-                className={selectClassName(rideFilters.thrill !== null)}
-              >
-                <option value="">尖叫指數</option>
-                {thrillFilterOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <label className="relative shrink-0">
-              <select
-                value={rideFilters.environment ?? ""}
-                onChange={(event) => setRideFilter("environment", event.target.value)}
-                className={selectClassName(rideFilters.environment !== null)}
-              >
-                <option value="">室內外</option>
-                {environmentFilterOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <label className="relative shrink-0">
-              <select
-                value={rideFilters.price ?? ""}
-                onChange={(event) => setRideFilter("price", event.target.value)}
-                className={selectClassName(rideFilters.price !== null)}
-              >
-                <option value="">票價／類型</option>
-                {priceFilterOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <label className="relative shrink-0">
-              <select
-                value={rideFilters.special ?? ""}
-                onChange={(event) => setRideFilter("special", event.target.value)}
-                className={selectClassName(rideFilters.special !== null)}
-              >
-                <option value="">特殊族群</option>
-                {specialFilterOptions.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" />
-            </label>
-
-            <button
-              onClick={resetFilters}
-              className="h-10 shrink-0 rounded-full border border-grayscale-100 bg-white px-4 text-sm font-semibold text-grayscale-700 transition active:scale-95 disabled:opacity-40"
-              disabled={!hasActiveFilters}
-            >
-              清除篩選
-            </button>
-          </div>
+          <FacilityRideFilterPanel
+            rideFilters={rideFilters}
+            onRideFiltersChange={setRideFilters}
+            onReset={resetFilters}
+            resetDisabled={!hasActiveFilters}
+            footer={
+              <div className="space-y-2 border-t border-grayscale-100 pt-3">
+                <p className="text-xs font-bold text-grayscale-500">等待時間排序</p>
+                <div className="flex flex-wrap gap-2">
+                  {sortOptions.map((option) => {
+                    const selected = sortDirection === option.value;
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => setSortDirection(option.value)}
+                        className={cn(
+                          'rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95',
+                          selected
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-grayscale-100 bg-white text-grayscale-700',
+                        )}
+                        aria-pressed={selected}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            }
+          />
         )}
+
       </div>
 
       <div className="flex-1 relative overflow-hidden flex flex-col">
         {viewMode === 'list' ? (
-          <div className={`flex-1 overflow-y-auto px-4 pb-32 space-y-4 no-scrollbar ${filterPanelOpen ? 'pt-40' : 'pt-24'}`}>
+          <div
+            className={cn(
+              'flex-1 space-y-3 overflow-y-auto px-4 pb-32 no-scrollbar',
+              filterPanelOpen ? 'pt-[30rem]' : 'pt-24',
+            )}
+          >
             {visibleAttractions.length === 0 && (
               <div className="rounded-xl border border-grayscale-100 bg-white p-6 text-center text-sm font-medium text-grayscale-500">
                 找不到符合條件的設施
               </div>
             )}
-            {visibleAttractions.map((attr) => (
-              <div key={attr.id} className="bg-white border border-grayscale-100 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-                <div className="flex flex-col sm:flex-row">
-                  <div className="sm:w-32 h-40 sm:h-auto shrink-0 bg-grayscale-100 relative">
-                    <Image src={attr.image} alt={attr.name} className="object-cover" fill sizes="(min-width: 640px) 128px, 100vw" />
-                    <div className="absolute top-2 left-2 bg-white/90 backdrop-blur-sm p-1.5 rounded-lg border border-grayscale-100">
-                       <attr.icon className="w-4 h-4 text-primary" />
+            {visibleAttractions.map((attr) => {
+              const activeFilterLabels = hasActiveRideFilters
+                ? getMatchingActiveFilterLabels(attr.filters, rideFilters)
+                : [];
+
+              return (
+                <article
+                  key={attr.id}
+                  className="overflow-hidden rounded-2xl border border-grayscale-100 bg-white shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="flex gap-3 p-3">
+                    <div className="relative h-[5.5rem] w-[5.5rem] shrink-0 overflow-hidden rounded-xl bg-grayscale-100">
+                      <Image
+                        src={attr.image}
+                        alt={attr.name}
+                        className="object-cover"
+                        fill
+                        sizes="88px"
+                      />
                     </div>
-                  </div>
-                  <div className="p-3 flex-1 flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-display font-semibold text-md text-on-surface">{attr.name}</h3>
-                        <div className="flex flex-col items-end">
-                          <span className="font-display font-semibold text-primary">{attr.wait}</span>
-                          <span className="text-[10px] text-grayscale-500 font-bold">預估排隊</span>
+
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate font-display text-base font-semibold text-grayscale-900">
+                            {attr.name}
+                          </h3>
+                          <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-grayscale-500">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 text-primary/80" />
+                            {attr.area}
+                          </p>
                         </div>
+                        <span className="shrink-0 whitespace-nowrap rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary ring-1 ring-primary/10">
+                          等待 {attr.waitMinutes} 分鐘
+                        </span>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <span className="px-2 py-0.5 bg-primary-50 text-primary rounded-full text-[10px] font-bold">{attr.tag}</span>
-                        <span className="px-2 py-0.5 bg-grayscale-100 text-grayscale-700 rounded-full text-[10px] font-bold">身高限制 {attr.restriction}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-grayscale-100 flex items-center justify-between text-grayscale-500">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        <span className="text-[10px] font-bold">{attr.area} · {attr.dist}</span>
-                      </div>
-                      <button className="text-primary font-bold text-[12px] flex items-center">
-                        查看詳情 <ChevronRight className="w-4 h-4" />
-                      </button>
+
+                      {attr.description && (
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-grayscale-600">
+                          {attr.description}
+                        </p>
+                      )}
+
+                      {activeFilterLabels.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {activeFilterLabels.map((label) => (
+                            <span
+                              key={label}
+                              className="rounded-full border border-primary/20 bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <Link
+                        href={`/facilities/${encodeURIComponent(attr.id)}`}
+                        className="mt-2.5 inline-flex items-center text-xs font-bold text-primary"
+                      >
+                        查看詳情
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
                     </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                </article>
+              );
+            })}
           </div>
         ) : (
           <div className="flex-1 relative bg-primary-100">
             {/* Map Canvas */}
-            <Image src={IMAGES.MAP} alt="Map" className="object-cover grayscale-[20%] opacity-80" fill sizes="100vw" />
+            <Image src={IMAGES.MAP} alt="Map" className="object-cover grayscale-[20%] opacity-80" fill sizes={APP_SHELL_IMAGE_SIZES} />
             
             {/* Markers */}
             <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 animate-bounce">
@@ -474,10 +401,10 @@ export function ListPage({ initialView = 'list' }: ListPageProps) {
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <button className="flex-1 bg-primary text-white h-12 rounded-xl font-semibold flex items-center justify-center gap-2 active:scale-95 transition-all">
+                    <button className="tp-btn-primary h-12 flex-1">
                       <Navigation className="w-5 h-5" /> 立即前往
                     </button>
-                    <button className="w-12 h-12 border border-primary text-primary rounded-xl flex items-center justify-center active:scale-95">
+                    <button className="flex h-12 w-12 items-center justify-center rounded-full border border-primary text-primary active:scale-95">
                       <Bookmark className="w-6 h-6" />
                     </button>
                   </div>

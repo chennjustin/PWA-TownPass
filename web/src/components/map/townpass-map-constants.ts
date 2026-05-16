@@ -15,6 +15,6 @@ export const contentTypeOptions: Array<{
   Icon: typeof FerrisWheel;
 }> = [
   { value: "facility", label: "遊樂設施", Icon: FerrisWheel },
-  { value: "restaurant", label: "餐廳", Icon: Utensils },
+  { value: "restaurant", label: "餐飲", Icon: Utensils },
   { value: "shop", label: "商店", Icon: ShoppingBag },
 ];

@@ -7,8 +7,6 @@ import {
   Clock,
   MapPin,
   Search,
-  SlidersHorizontal,
-  Tag,
   X,
 } from "lucide-react";
 import {
@@ -17,6 +15,17 @@ import {
   type Marker as ClusterMarker,
   type Renderer,
 } from "@googlemaps/markerclusterer";
+import {
+  FacilityPointDetailContent,
+  FacilityPointDetailSummary,
+} from "@/src/components/FacilityPointDetailContent";
+import {
+  FacilityFilterToggleButton,
+  FacilityRideFilterPanel,
+  getActiveRideFilterCount,
+} from "@/src/components/FacilityRideFilterPanel";
+import { getAppNow, isDemoDaytime } from "@/src/lib/app-time";
+import { getFacilityImageUrl } from "@/src/lib/facility-images";
 import { loadGoogleMapsScript } from "@/src/lib/google-maps-service";
 import {
   loadTownPassPoints,
@@ -27,11 +36,6 @@ import {
   type PlaceDetail,
   type PlaceDetailsResponse,
   PLACE_DETAILS_URL,
-  heightFilterOptions,
-  thrillFilterOptions,
-  environmentFilterOptions,
-  priceFilterOptions,
-  specialFilterOptions,
   defaultRideFilters,
   getFacilityWaitMinutes,
 } from "@/src/lib/townpass-map-data";
@@ -41,6 +45,7 @@ import {
   MARKER_CLUSTER_MAX_ZOOM,
   MARKER_CLUSTER_RADIUS,
   DETAIL_SHEET_COLLAPSE_MS,
+  FACILITY_FOCUS_ZOOM,
   contentTypeOptions,
 } from "./townpass-map-constants";
 import {
@@ -58,6 +63,7 @@ import {
   getParkOperatingStatus,
   getPointContentType,
   getPointLabel,
+  getPointLabelDotClass,
   getRecommendedHeightFilters,
   isRidePoint,
   matchesListFilter,
@@ -77,7 +83,21 @@ import type {
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const googleMapsMapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
 
-export function TownPassMap() {
+type TownPassMapProps = {
+  initialPointId?: string | null;
+  /** 僅移動地圖至點位，不展開底部詳情卡片 */
+  initialPointFocusOnly?: boolean;
+  /** 從設施詳情帶入時，地圖建立即用此中心（避免先顯示園區預設再跳轉） */
+  initialCenter?: { lat: number; lng: number } | null;
+};
+
+export function TownPassMap({
+  initialPointId = null,
+  initialPointFocusOnly = false,
+  initialCenter = null,
+}: TownPassMapProps) {
+  const mapBootCenterRef = useRef(initialCenter);
+  const mapBootFocusOnlyRef = useRef(initialPointFocusOnly);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapCarouselRef = useRef<HTMLDivElement | null>(null);
   /** 與本次使用者操作對應的點位 id，用於略過 marker effect 內重複的相機更新（避免打斷 pan 動畫） */
@@ -111,10 +131,15 @@ export function TownPassMap() {
   const [detailSheetExpanded, setDetailSheetExpanded] = useState(false);
   const [allPoints, setAllPoints] = useState<TownPassPoint[]>([]);
   const [placeDetails, setPlaceDetails] = useState<PlaceDetail[]>([]);
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [currentTime, setCurrentTime] = useState(() => getAppNow());
+  const initialPointHandledRef = useRef<string | null>(null);
+  const instantDeepLinkFocusPointIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    if (isDemoDaytime) {
+      return;
+    }
+    const timer = window.setInterval(() => setCurrentTime(getAppNow()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -160,9 +185,15 @@ export function TownPassMap() {
           return;
         }
 
+        const bootCenter = mapBootCenterRef.current ?? parkCenter;
+        const bootZoom =
+          mapBootFocusOnlyRef.current && mapBootCenterRef.current
+            ? FACILITY_FOCUS_ZOOM
+            : 18;
+
         const mapOptions: Record<string, unknown> = {
-          center: parkCenter,
-          zoom: 18,
+          center: bootCenter,
+          zoom: bootZoom,
           minZoom: MAP_MIN_ZOOM,
           maxZoom: MAP_MAX_ZOOM,
           restriction: {
@@ -178,6 +209,10 @@ export function TownPassMap() {
 
         if (googleMapsMapId) {
           mapOptions.mapId = googleMapsMapId;
+        }
+
+        if (isDemoDaytime) {
+          mapOptions.colorScheme = "LIGHT";
         }
 
         const map = new maps.Map(mapContainerRef.current, mapOptions);
@@ -320,6 +355,59 @@ export function TownPassMap() {
     infoWindowRef.current?.close();
   };
 
+  useEffect(() => {
+    if (!initialPointId || allPoints.length === 0) {
+      return;
+    }
+
+    if (initialPointHandledRef.current === initialPointId) {
+      return;
+    }
+
+    const point = allPoints.find((item) => item.id === initialPointId);
+    if (!point || !isRidePoint(point)) {
+      return;
+    }
+
+    initialPointHandledRef.current = initialPointId;
+    setSelectedContentType("facility");
+    setLayers({ facilities: true, restaurants: false });
+    setQuery("");
+    setRideFilters(defaultRideFilters);
+    setSelectedCategory(null);
+    setSelectedFloor(null);
+    setChildHeight("");
+    setFilterPanelOpen(false);
+
+    if (initialPointFocusOnly) {
+      instantDeepLinkFocusPointIdRef.current = initialPointId;
+      setActiveCarouselPointId(initialPointId);
+      setSelectedPoint(null);
+      setDetailSheetExpanded(false);
+
+      if (mapRef.current) {
+        setMapCenterAndZoom(
+          mapRef.current,
+          { lat: point.lat, lng: point.lng },
+          FACILITY_FOCUS_ZOOM,
+        );
+      }
+      return;
+    }
+
+    if (!mapRef.current) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      focusPoint(point);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [allPoints, initialPointFocusOnly, initialPointId]);
+
   const closeSelectedPointToCarousel = () => {
     const point = selectedPoint;
     if (!point || !mapRef.current) {
@@ -435,7 +523,7 @@ export function TownPassMap() {
             icon: {
               url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="18" fill="#006876" stroke="#ffffff" stroke-width="3" />
+                  <circle cx="20" cy="20" r="18" fill="#00afb8" stroke="#ffffff" stroke-width="3" />
                   <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="bold" font-family="sans-serif">${count}</text>
                 </svg>
               `)}`,
@@ -480,17 +568,40 @@ export function TownPassMap() {
       markersRef.current.map(({ marker }) => marker as unknown as ClusterMarker),
     );
 
+    const deepLinkFocusId = instantDeepLinkFocusPointIdRef.current;
+    if (deepLinkFocusId) {
+      const deepLinkPoint = visiblePoints.find((point) => point.id === deepLinkFocusId);
+      if (deepLinkPoint) {
+        instantDeepLinkFocusPointIdRef.current = null;
+        pendingMapFocusPointIdRef.current = deepLinkPoint.id;
+        skipNextFitBoundsAfterClusterRef.current = true;
+        setMapCenterAndZoom(
+          mapRef.current,
+          { lat: deepLinkPoint.lat, lng: deepLinkPoint.lng },
+          FACILITY_FOCUS_ZOOM,
+        );
+        const pointIndex = visiblePoints.findIndex((point) => point.id === deepLinkPoint.id);
+        if (pointIndex !== -1) {
+          const container = mapCarouselRef.current;
+          if (container) {
+            const stride = getCarouselSlideStride(container);
+            container.scrollTo({ left: pointIndex * stride, behavior: "auto" });
+          }
+        }
+      }
+    }
+
     const focusedPoint = selectedPointId
       ? visiblePoints.find((point) => point.id === selectedPointId)
       : null;
 
-    if (focusedPoint) {
+    if (!deepLinkFocusId && focusedPoint) {
       if (pendingMapFocusPointIdRef.current === focusedPoint.id) {
         pendingMapFocusPointIdRef.current = null;
       } else {
         focusMapOnPoint(mapRef.current, focusedPoint);
       }
-    } else if (visiblePoints.length > 1) {
+    } else if (!deepLinkFocusId && visiblePoints.length > 1) {
       const carouselPoint = activeCarouselPointId
         ? visiblePoints.find((p) => p.id === activeCarouselPointId)
         : null;
@@ -508,7 +619,7 @@ export function TownPassMap() {
           mapRef.current.fitBounds(bounds, 48);
         }
       }
-    } else if (!userPosition && visiblePoints.length === 1) {
+    } else if (!deepLinkFocusId && !userPosition && visiblePoints.length === 1) {
       setMapCenterAndZoom(
         mapRef.current,
         {
@@ -541,8 +652,7 @@ export function TownPassMap() {
     childHeight.trim().length > 0 ||
     Object.values(rideFilters).some((values) => values.length > 0);
   const activeRideFilterCount =
-    (childHeight.trim().length > 0 ? 1 : 0) +
-    Object.values(rideFilters).reduce((total, values) => total + values.length, 0);
+    (childHeight.trim().length > 0 ? 1 : 0) + getActiveRideFilterCount(rideFilters);
 
   const hasActiveFilters =
     query.trim().length > 0 ||
@@ -554,16 +664,6 @@ export function TownPassMap() {
   const selectedPlaceDetail = selectedPoint
     ? placeDetailsByName.get(normalizePlaceName(selectedPoint.name)) ?? null
     : null;
-
-  const selectedFilterTags = selectedPlaceDetail
-    ? [
-        selectedPlaceDetail.filters?.height,
-        selectedPlaceDetail.filters?.thrill,
-        ...(selectedPlaceDetail.filters?.environment ?? []),
-        selectedPlaceDetail.filters?.price,
-        ...(selectedPlaceDetail.filters?.special ?? []),
-      ].filter((tag): tag is string => Boolean(tag))
-    : [];
 
   const selectedOperatingStatus = useMemo(
     () => getParkOperatingStatus(currentTime),
@@ -588,48 +688,6 @@ export function TownPassMap() {
       setRideFilters(defaultRideFilters);
     }
   };
-
-  const toggleRideFilter = (key: keyof RideFilterState, value: string) => {
-    setRideFilters((prev) => {
-      const selectedValues = prev[key];
-      const nextValues = selectedValues.includes(value)
-        ? selectedValues.filter((selectedValue) => selectedValue !== value)
-        : [...selectedValues, value];
-
-      return { ...prev, [key]: nextValues };
-    });
-  };
-
-  const renderFilterGroup = (
-    key: keyof RideFilterState,
-    label: string,
-    options: string[],
-    className = "",
-  ) => (
-    <div className={`space-y-2 ${className}`}>
-      <p className="text-xs font-bold text-grayscale-500">{label}</p>
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => {
-          const selected = rideFilters[key].includes(option);
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => toggleRideFilter(key, option)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-95 ${
-                selected
-                  ? "border-primary bg-primary text-white"
-                  : "border-grayscale-100 bg-white text-grayscale-700"
-              }`}
-              aria-pressed={selected}
-            >
-              {option}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 
   const resetFilters = () => {
     setQuery("");
@@ -677,54 +735,29 @@ export function TownPassMap() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="h-11 w-full rounded-xl border border-grayscale-100 bg-white pl-10 pr-4 text-sm shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
-              placeholder="搜尋設施、餐廳或類型"
+              className="tp-search-field shadow-sm"
+              placeholder="搜尋設施、餐飲或類型"
             />
           </div>
           {selectedContentType === "facility" && (
-            <button
+            <FacilityFilterToggleButton
+              className="absolute right-0 top-0"
+              open={filterPanelOpen}
+              activeCount={activeRideFilterCount}
+              highlighted={filterPanelOpen || hasActiveRideFilters}
               onClick={() => setFilterPanelOpen((open) => !open)}
-              className={`absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl border shadow-sm transition active:scale-95 ${
-                filterPanelOpen || hasActiveRideFilters
-                  ? "border-primary bg-primary text-white"
-                  : "border-grayscale-100 bg-white text-primary"
-              }`}
-              aria-expanded={filterPanelOpen}
-              aria-label="開啟地圖篩選器"
-            >
-              <SlidersHorizontal className="h-5 w-5" />
-              {activeRideFilterCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
-                  {activeRideFilterCount}
-                </span>
-              )}
-            </button>
+              ariaLabel="開啟地圖篩選器"
+            />
           )}
         </div>
 
         {filterPanelOpen && selectedContentType === "facility" && (
-          <div className="space-y-3 rounded-xl border border-grayscale-100 bg-white/95 p-3 shadow-lg backdrop-blur">
-            <div className="grid gap-3">
-              {renderFilterGroup("height", "身高限制", heightFilterOptions)}
-              {renderFilterGroup("thrill", "尖叫指數", thrillFilterOptions)}
-              {renderFilterGroup("environment", "室內外", environmentFilterOptions)}
-              {renderFilterGroup("price", "票價 / 類型", priceFilterOptions)}
-              {renderFilterGroup("special", "特殊族群", specialFilterOptions)}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-grayscale-500">
-                {activeRideFilterCount > 0 ? `已套用 ${activeRideFilterCount} 個篩選` : "尚未套用篩選"}
-              </span>
-              <button
-                onClick={resetFilters}
-                disabled={!hasActiveFilters}
-                className="text-xs font-semibold text-primary disabled:text-grayscale-300"
-              >
-                清除篩選
-              </button>
-            </div>
-          </div>
+          <FacilityRideFilterPanel
+            rideFilters={rideFilters}
+            onRideFiltersChange={setRideFilters}
+            onReset={resetFilters}
+            resetDisabled={!hasActiveFilters}
+          />
         )}
       </div>
 
@@ -751,118 +784,30 @@ export function TownPassMap() {
                 </button>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-bold text-primary">
-                      {getPointLabel(selectedPoint.pointType)}
-                    </span>
-                    <span className="text-[10px] font-bold text-grayscale-500">
-                      {selectedPlaceDetail?.category ?? selectedPoint.category}
-                    </span>
-                  </div>
-                  <h2 className="mt-1 truncate font-display text-lg font-semibold text-grayscale-900">
-                    {selectedPoint.name}
-                  </h2>
-                  <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-grayscale-500">
-                    <MapPin className="h-3.5 w-3.5" />
-                    {getFloorText(selectedPoint.floor)}
-                  </p>
-                  {selectedWaitMinutes !== null && (
-                    <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-primary">
-                      <Clock className="h-3.5 w-3.5" />
-                      等待 {selectedWaitMinutes} 分鐘
-                    </p>
-                  )}
-                </button>
-              </div>
-
-              <div
-                className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
-                  detailSheetExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                }`}
+              <button
+                type="button"
+                onClick={() => setDetailSheetExpanded((expanded) => !expanded)}
+                className="w-full text-left"
+                aria-expanded={detailSheetExpanded}
               >
-                <div className="min-h-0 overflow-hidden">
-                  <div
-                    className={`space-y-4 border-t border-grayscale-100 pt-4 ${
-                      detailSheetExpanded ? "" : "pointer-events-none"
-                    }`}
-                    aria-hidden={!detailSheetExpanded}
-                  >
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-grayscale-50 p-3">
-                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
-                          <Tag className="h-4 w-4" />
-                        </div>
-                        <p className="text-[10px] font-bold text-grayscale-500">分類</p>
-                        <p className="mt-1 text-sm font-semibold text-grayscale-900">
-                          {selectedPlaceDetail?.category ?? selectedPoint.category}
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-grayscale-50 p-3">
-                        <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-white text-primary">
-                          <MapPin className="h-4 w-4" />
-                        </div>
-                        <p className="text-[10px] font-bold text-grayscale-500">位置</p>
-                        <p className="mt-1 text-sm font-semibold text-grayscale-900">
-                          {getFloorText(selectedPoint.floor)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {selectedWaitMinutes !== null && (
-                      <div className="rounded-xl bg-primary-50 p-4">
-                        <div className="flex items-center gap-2 text-primary">
-                          <Clock className="h-4 w-4" />
-                          <p className="text-sm font-semibold">
-                            {selectedOperatingStatus.isOpen ? "目前等待時間" : "營業狀態"}
-                          </p>
-                        </div>
-                        <p className="mt-2 font-display text-2xl font-semibold text-grayscale-900">
-                          {selectedOperatingStatus.isOpen
-                            ? `${selectedWaitMinutes} 分鐘`
-                            : selectedOperatingStatus.label}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-grayscale-500">
-                          {selectedOperatingStatus.hours}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="rounded-xl bg-primary-50 p-4">
-                      <div className="flex items-center gap-2 text-primary">
-                        <Clock className="h-4 w-4" />
-                        <p className="text-sm font-semibold">
-                          {selectedPlaceDetail ? "設施介紹" : "即時資訊"}
-                        </p>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-grayscale-700">
-                        {selectedPlaceDetail?.description ??
-                          "目前顯示的是園區地圖點位資料，可依類型、樓層與關鍵字搜尋。點選定位按鈕可回到此設施位置。"}
-                      </p>
-                    </div>
-
-                    {selectedFilterTags.length > 0 && (
-                      <div className="rounded-xl border border-grayscale-100 p-4">
-                        <p className="text-[10px] font-bold text-grayscale-500">篩選標籤</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {selectedFilterTags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-grayscale-100 px-3 py-1 text-xs font-semibold text-grayscale-700"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+                {detailSheetExpanded ? (
+                  <FacilityPointDetailContent
+                    point={selectedPoint}
+                    placeDetail={selectedPlaceDetail}
+                    operatingStatus={selectedOperatingStatus}
+                    waitMinutes={selectedWaitMinutes}
+                    imageUrl={getFacilityImageUrl(selectedPoint.id)}
+                    imageSize="sheet"
+                  />
+                ) : (
+                  <FacilityPointDetailSummary
+                    point={selectedPoint}
+                    placeDetail={selectedPlaceDetail}
+                    operatingStatus={selectedOperatingStatus}
+                    waitMinutes={selectedWaitMinutes}
+                  />
+                )}
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-0.5">
@@ -908,13 +853,9 @@ export function TownPassMap() {
                     className="w-full min-w-full shrink-0 snap-center rounded-lg border border-grayscale-100 bg-white p-3 text-left active:scale-95"
                   >
                     <div className="mb-2 flex items-center gap-1.5">
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          point.pointType === "facility" ? "bg-primary" : "bg-red-500"
-                        }`}
-                      />
+                      <span className={`h-2.5 w-2.5 rounded-full ${getPointLabelDotClass(point)}`} />
                       <span className="text-[11px] font-bold text-grayscale-500">
-                        {getPointLabel(point.pointType)}
+                        {getPointLabel(point)}
                       </span>
                     </div>
                     <p className="truncate text-base font-semibold text-grayscale-900">{point.name}</p>

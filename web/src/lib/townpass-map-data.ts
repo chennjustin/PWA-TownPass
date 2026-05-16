@@ -1,3 +1,5 @@
+import { getDisplayFacilityName } from "@/src/lib/facility-display";
+
 export type TownPassPointType = "facility" | "restaurant";
 
 export type TownPassPoint = {
@@ -75,7 +77,9 @@ async function fetchPointsFromGeoJson(
     .map((feature, index) => {
       const coordinates = feature.geometry?.coordinates;
       const [lng, lat] = coordinates ?? [parkCenter.lng, parkCenter.lat];
-      const name = feature.properties?.name?.trim() || `${pointType}-${index + 1}`;
+      const rawName = feature.properties?.name?.trim() || `${pointType}-${index + 1}`;
+      const name =
+        pointType === "facility" ? getDisplayFacilityName(rawName) : rawName;
       const floor = feature.properties?.floor ?? null;
       const rawCategory = feature.properties?.type?.trim();
       const category =
@@ -134,7 +138,7 @@ export const heightFilterOptions = [
 
 export const thrillFilterOptions = ["溫和型", "中度刺激", "高刺激"];
 export const environmentFilterOptions = ["露天", "頂棚區"];
-export const priceFilterOptions = ["🎠 基礎遊具（20～30 元）", "⭐ 委外精選設施（50～80 元）"];
+export const priceFilterOptions: string[] = [];
 export const specialFilterOptions = ["🤰 孕婦可搭乘", "♿ 無障礙標示", "❄️ 冷氣開放"];
 
 export const defaultRideFilters: RideFilterState = {

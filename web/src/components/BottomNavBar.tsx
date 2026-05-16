@@ -15,7 +15,10 @@ export function BottomNavBar() {
   ];
 
   return (
-    <nav className="absolute bottom-0 left-0 right-0 z-40 flex min-h-[80px] items-center border-t border-grayscale-100 bg-surface px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_16px_0_rgba(11,13,14,0.08)]">
+    <nav
+      className="absolute bottom-0 left-0 right-0 z-40 flex min-h-[80px] items-center border-t border-grayscale-100 bg-white px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
+      style={{ boxShadow: 'var(--shadow-nav)' }}
+    >
       {navItems.map((item) => {
         const isActive = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path);
 
@@ -24,12 +27,17 @@ export function BottomNavBar() {
             key={item.path}
             href={item.path}
             className={cn(
-              'flex h-14 flex-1 flex-col items-center justify-center transition-all duration-200 active:scale-95',
-              isActive ? 'text-primary font-semibold' : 'text-grayscale-500 font-normal'
+              'relative flex h-14 flex-1 flex-col items-center justify-center gap-0.5 transition-all duration-200 active:scale-95',
+              isActive ? 'text-primary' : 'text-grayscale-500',
             )}
           >
-            <item.icon className="w-6 h-6" />
-            <span className="text-[10px] mt-1">{item.label}</span>
+            {isActive && (
+              <span className="absolute top-0 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
+            )}
+            <item.icon className={cn('h-6 w-6', isActive && 'stroke-[2.25]')} />
+            <span className={cn('text-[10px]', isActive ? 'font-semibold' : 'font-medium')}>
+              {item.label}
+            </span>
           </Link>
         );
       })}

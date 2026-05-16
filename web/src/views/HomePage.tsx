@@ -3,8 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { HelpCircle, Info, Calendar, Users, ChevronDown, ArrowRight, Bus, Navigation, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
-import { IMAGES } from '@/src/constants';
+import { HelpCircle, Calendar, ChevronDown, ArrowRight, Bus, Navigation, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { APP_SHELL_IMAGE_SIZES, IMAGES } from '@/src/constants';
 import { townPassFaqData } from '@/src/lib/townpass-faq-data';
 
 const homeQuickFaqs = townPassFaqData.filter((item) => item.featured).slice(0, 4);
@@ -91,20 +91,15 @@ export function HomePage() {
     <div className="px-4 space-y-6 pb-6">
       {/* Banner */}
       <section className="mt-4">
-        <div className="relative w-full h-44 rounded-xl overflow-hidden shadow-sm">
-          {recentActivities.map((activity, index) => (
-            <Image
-              key={activity.title}
-              className={`object-cover transition-opacity duration-500 ${
-                activeBannerIndex === index ? 'opacity-100' : 'opacity-0'
-              }`}
-              src={activity.image}
-              alt={activity.title}
-              fill
-              sizes="100vw"
-              priority={index === 0}
-            />
-          ))}
+        <div className="relative h-44 w-full overflow-hidden rounded-2xl shadow-[var(--shadow-card)]">
+          <Image
+            src={recentActivities[activeBannerIndex].image}
+            alt={recentActivities[activeBannerIndex].title}
+            fill
+            sizes={APP_SHELL_IMAGE_SIZES}
+            priority
+            className="object-cover transition-opacity duration-500"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-transparent flex flex-col justify-end p-4">
             <h2 className="text-white font-display font-semibold text-lg">{recentActivities[activeBannerIndex].title}</h2>
             <p className="text-white/90 text-xs">{recentActivities[activeBannerIndex].subtitle}</p>
@@ -144,17 +139,12 @@ export function HomePage() {
 
       {/* Transport */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <h3 className="font-display font-semibold text-lg text-grayscale-900">交通方式</h3>
-            <Bus className="h-4 w-4 text-primary" />
-          </div>
-          <Link href="/transport" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
-            查看更多 <ArrowRight className="w-4 h-4" />
-          </Link>
+        <div className="flex items-center gap-1">
+          <h3 className="tp-section-title">交通方式</h3>
+          <Bus className="h-4 w-4 text-primary" />
         </div>
 
-        <div className="space-y-2 border-y border-grayscale-100 py-3">
+        <div className="tp-card space-y-2 p-4">
           <div className="flex items-start gap-2 text-sm text-grayscale-700">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div>
@@ -163,7 +153,7 @@ export function HomePage() {
               <button
                 onClick={navigateFromCurrentLocation}
                 disabled={isLocating}
-                className="mt-2 inline-flex items-center gap-1 border border-primary px-3 py-2 text-xs font-semibold text-primary transition disabled:opacity-60 active:scale-95"
+                className="tp-btn-outline mt-2 disabled:opacity-60"
               >
                 <Navigation className="h-3.5 w-3.5" />
                 {isLocating ? '定位中...' : '從目前位置導航'}
@@ -174,56 +164,11 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Real-time Info */}
-      <section className="space-y-3">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-1">
-            <h3 className="font-display font-semibold text-lg text-grayscale-900">即時資訊</h3>
-            <Info className="h-4 w-4 text-primary" />
-          </div>
-          <span className="font-semibold text-sm text-primary">查看更多</span>
-        </div>
-        <div className="flex flex-col gap-4">
-          <div className="bg-white border border-grayscale-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
-            <div>
-              <p className="text-grayscale-500 text-xs font-medium mb-1">今日入園狀態</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-display font-semibold text-primary">舒適</p>
-                <span className="text-xs font-semibold text-grayscale-500 flex items-center gap-1">預估 3,500 人</span>
-              </div>
-            </div>
-            <div className="w-12 h-12 bg-primary-50 rounded-full flex items-center justify-center">
-              <Users className="w-6 h-6 text-primary" />
-            </div>
-          </div>
-          <div className="bg-white border border-grayscale-100 rounded-xl overflow-hidden shadow-sm">
-            <div className="p-3 bg-primary-50 border-b border-grayscale-100 flex justify-between items-center">
-              <p className="text-primary font-semibold text-sm">最短排隊設施</p>
-            </div>
-            <div className="divide-y divide-grayscale-100">
-              {[
-                { name: '雲霄飛車', time: '10 min' },
-                { name: '旋轉木馬', time: '5 min' },
-                { name: '激流泛舟', time: '15 min' },
-              ].map((attr, idx) => (
-                <div key={idx} className="p-3 flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="w-2 h-2 bg-primary-500 rounded-full" />
-                    <span className="font-semibold text-grayscale-900">{attr.name}</span>
-                  </div>
-                  <span className="text-primary font-semibold">{attr.time}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* FAQ Preview */}
       <section className="space-y-3">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1">
-            <h3 className="font-display font-semibold text-lg text-grayscale-900">常見問題</h3>
+            <h3 className="tp-section-title">常見問題</h3>
             <HelpCircle className="h-4 w-4 text-primary" />
           </div>
           <Link href="/faq" className="inline-flex items-center gap-1 text-primary font-semibold text-sm">
@@ -231,11 +176,11 @@ export function HomePage() {
           </Link>
         </div>
 
-        <div className="divide-y divide-grayscale-200 border-y border-grayscale-100">
+        <div className="tp-card divide-y divide-grayscale-100 overflow-hidden">
           {homeQuickFaqs.map((faq) => (
             <details
               key={faq.id}
-              className="group bg-transparent py-3"
+              className="group bg-transparent px-4 py-3"
             >
               <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
                 <div>
@@ -262,19 +207,19 @@ export function HomePage() {
       {/* Activities */}
       <section className="space-y-3 pb-8">
         <div className="flex items-center">
-          <h3 className="font-display font-semibold text-lg text-grayscale-900">活動訊息</h3>
+          <h3 className="tp-section-title">活動訊息</h3>
           <Calendar className="ml-1 h-4 w-4 text-primary" />
         </div>
         <div className="flex overflow-x-auto gap-4 pb-4 pl-1 pr-1 no-scrollbar snap-x snap-mandatory">
           {activityCards.map((activity) => (
             <article
               key={activity.title}
-              className="flex-shrink-0 w-[86%] border border-grayscale-100 bg-white snap-start overflow-hidden shadow-sm"
+              className="w-[86%] shrink-0 snap-start overflow-hidden rounded-2xl bg-white shadow-[var(--shadow-card)]"
             >
               <div className="relative h-44">
                 <Image className="object-cover" src={activity.image} alt={activity.title} fill sizes="320px" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
-                <div className="absolute left-3 top-3 inline-flex items-center gap-1 bg-white/90 px-2 py-1 text-[10px] font-semibold text-grayscale-700">
+                <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-grayscale-700 shadow-sm">
                   <Calendar className="h-3 w-3 text-primary" />
                   {activity.date}
                 </div>
@@ -284,7 +229,7 @@ export function HomePage() {
               </div>
               <div className="flex items-center justify-between p-3">
                 <p className="text-sm text-grayscale-600">{activity.description}</p>
-                <button className="inline-flex shrink-0 items-center gap-1 border border-primary px-2.5 py-1.5 text-xs font-semibold text-primary transition active:scale-95">
+                <button className="tp-btn-outline shrink-0 px-3 py-1.5">
                   立即查看
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>

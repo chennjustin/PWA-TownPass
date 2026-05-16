@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Star, Info, MapPin as LocationIcon, Clock, BellRing } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
-import { IMAGES } from '@/src/constants';
+import { APP_SHELL_IMAGE_SIZES, IMAGES } from '@/src/constants';
 
 export function SchedulePage() {
   const [expandedId, setExpandedId] = useState<number | null>(1);
@@ -48,8 +48,10 @@ export function SchedulePage() {
           <button
             key={idx}
             className={cn(
-              "flex-none px-5 py-2 rounded-xl font-semibold text-sm transition-all shadow-sm",
-              idx === 0 ? "bg-primary text-white" : "bg-surface-container-low text-grayscale-700 hover:bg-grayscale-100"
+              "flex-none rounded-full px-5 py-2.5 text-sm font-semibold transition-all",
+              idx === 0
+                ? "bg-primary text-white shadow-[0_4px_12px_rgba(0,175,184,0.28)]"
+                : "bg-white text-grayscale-700 shadow-[var(--shadow-card)] hover:bg-grayscale-50"
             )}
           >
             {date}
@@ -72,8 +74,8 @@ export function SchedulePage() {
 
             <div 
               className={cn(
-                "bg-white border rounded-xl overflow-hidden transition-all duration-300 shadow-sm cursor-pointer",
-                expandedId === event.id ? "border-primary border-2" : "border-grayscale-100 hover:bg-primary-50"
+                "tp-card cursor-pointer overflow-hidden transition-all duration-300",
+                expandedId === event.id ? "ring-2 ring-primary" : "hover:bg-primary-50/50"
               )}
               onClick={() => setExpandedId(expandedId === event.id ? null : event.id)}
             >
@@ -109,13 +111,13 @@ export function SchedulePage() {
                         <span>{event.tag}</span>
                       </div>
                     </div>
-                    <button className="w-full py-3 bg-primary text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all">
+                    <button className="tp-btn-primary w-full py-3">
                       <BellRing className="w-4 h-4" />
                       提醒我
                     </button>
                     {event.image && (
                        <div className="relative h-32 overflow-hidden rounded-lg">
-                         <Image src={event.image} alt={event.title} className="object-cover" fill sizes="100vw" />
+                         <Image src={event.image} alt={event.title} className="object-cover" fill sizes={APP_SHELL_IMAGE_SIZES} />
                        </div>
                     )}
                   </div>
@@ -127,7 +129,7 @@ export function SchedulePage() {
       </section>
 
       {/* Info Banner */}
-      <div className="p-4 bg-primary-100 rounded-xl flex items-center gap-4">
+      <div className="tp-card-accent flex items-center gap-4 p-4">
         <div className="bg-primary text-white w-12 h-12 rounded-full flex items-center justify-center shrink-0">
           <Info className="w-6 h-6" />
         </div>
